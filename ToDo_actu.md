@@ -83,7 +83,7 @@
 - [x] Promoción manual de juveniles U18+ al primer equipo.
 - [x] Staff con efectos reales en entrenamiento, cantera, scouting y riesgo de lesiones.
 - [x] Resumen visual de impacto del staff en Entrenamientos y Cantera.
-- [x] Automatismos tácticos entrenables y configurables.
+- [x] Automatismos tácticos entrenables y configurables, aplicados contextualmente en simulación.
 - [ ] Moral, química y roles.
 
 ## Hito H — Competiciones y carrera larga

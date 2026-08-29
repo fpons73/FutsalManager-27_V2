@@ -182,6 +182,13 @@ pub enum MatchState {
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
+pub struct EngineAutomation {
+    pub trigger_type: u8,
+    pub threshold: f32,
+    pub tactics: EngineTactics,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct EngineTactics {
     pub formation: u8,
     pub tempo: f32,
@@ -222,6 +229,8 @@ pub struct MatchEngine {
     pub bench: [Vec<u32>; 2],
     pub tactics: [EngineTactics; 2],
     pub allow_powerplay: [bool; 2],
+    pub automation: [Option<EngineAutomation>; 2],
+    pub automation_applied: [bool; 2],
     pub timeouts_used: [u8; 2],
     pub timeout_until: u32,
     on_pitch_ids: [Vec<u32>; 2],
@@ -283,6 +292,8 @@ impl MatchEngine {
             bench,
             tactics: [EngineTactics::default(), EngineTactics::default()],
             allow_powerplay: [true, true],
+            automation: [None, None],
+            automation_applied: [false, false],
             timeouts_used: [0, 0],
             timeout_until: 0,
             on_pitch_ids: on_pitch,
@@ -308,6 +319,32 @@ impl MatchEngine {
 
     pub fn set_allow_powerplay(&mut self, team: usize, enabled: bool) {
         if team < 2 { self.allow_powerplay[team] = enabled; }
+    }
+
+    pub fn set_automation(&mut self, team: usize, automation: Option<EngineAutomation>) {
+        if team < 2 { self.automation[team] = automation; }
+    }
+
+    fn apply_automation_if_needed(&mut self) {
+        for team in 0..2 {
+            if self.automation_applied[team] { continue; }
+            let Some(auto) = self.automation[team] else { continue; };
+            let other = 1 - team;
+            let late = self.time as f32 >= self.rules.total_seconds as f32 * 0.75;
+            let losing = self.score[team] < self.score[other];
+            let margin = (self.score[other] as f32 - self.score[team] as f32) * 20.0;
+            let triggered = match auto.trigger_type {
+                1 => late && losing && margin >= auto.threshold,
+                2 => late && !losing,
+                _ => late && losing,
+            };
+            if triggered {
+                self.tactics[team] = auto.tactics;
+                self.automation_applied[team] = true;
+                self.reset_positions();
+                self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"tactical_automation".into(), team_id:team as u32, player_id:None, description:"Automatismo táctico activado".into(), x:20.0, y:10.0 });
+            }
+        }
     }
 
     pub fn update_live_tactics(&mut self, team: usize, tactics: EngineTactics) -> Result<(), String> {
@@ -407,6 +444,8 @@ impl MatchEngine {
             self.events.extend(new_events.clone());
             return new_events;
         }
+
+        self.apply_automation_if_needed();
 
         let losing_powerplay = self.time > self.rules.total_seconds - 180;
         if losing_powerplay {

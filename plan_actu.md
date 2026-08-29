@@ -30,7 +30,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Contratos avanzados, renovaciones, cláusulas, bonus, cesiones y jugadores libres.
 - Gestión funcional del staff y efecto de sus atributos.
 - Tácticas durante el partido, cambios manuales y tiempos muertos.
-- Automatismos tácticos entrenables y configurables; queda ampliar su aplicación contextual en el motor.
+- Automatismos tácticos entrenables, configurables y aplicados contextualmente durante la simulación.
 - IA táctica reactiva y estilos persistentes por club.
 - Estadísticas individuales, análisis postpartido, crónicas y gráficos.
 - Historial de temporadas, palmarés, récords y evolución de jugadores.

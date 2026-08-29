@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::commands::{AppState, LiveMatchInfo};
-use crate::engine::{EngineTactics, MatchEngine, MatchSnapshot, PlayerAttrs, Role};
+use crate::engine::{EngineAutomation, EngineTactics, MatchEngine, MatchSnapshot, PlayerAttrs, Role};
 
 #[derive(Serialize)]
 pub struct PreMatch {
@@ -113,6 +113,11 @@ async fn load_roster_raw(pool: &sqlx::SqlitePool, club_id: i64) -> Result<Vec<(i
 
 fn attrs_from(r: &(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)) -> PlayerAttrs {
     PlayerAttrs::from_ints(r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8, r.9, r.10, r.11, r.12, 50)
+}
+
+async fn load_automation(pool: &sqlx::SqlitePool, club_id: i64) -> Result<Option<EngineAutomation>, String> {
+    let row: Option<(String,i64,String,i64,i64,i64,i64)> = sqlx::query_as("SELECT trigger_type, threshold, formation, tempo, pressing, defensive_line, width FROM tactical_automations WHERE club_id=? AND enabled=1 ORDER BY training_level DESC, id LIMIT 1").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?;
+    Ok(row.map(|(trigger, threshold, formation, tempo, pressing, defensive_line, width)| EngineAutomation { trigger_type: if trigger == "winning_late" { 2 } else if trigger == "losing_margin" { 1 } else { 0 }, threshold: threshold as f32, tactics: EngineTactics { formation: formation_code(&formation), tempo:tempo as f32, pressing:pressing as f32, defensive_line:defensive_line as f32, width:width as f32 } }))
 }
 
 async fn natural_role(pool: &sqlx::SqlitePool, pid: i64) -> Role {
@@ -226,6 +231,7 @@ pub async fn start_live_match_tactics(
     };
     eng.set_tactics(0, t);
     eng.set_allow_powerplay(0, powerplay_enabled);
+    if let Some(auto) = load_automation(&pool, home).await? { eng.set_automation(0, Some(auto)); }
     // Tacticas del rival desde BD (o default)
     let away_tac: Option<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(
         "SELECT formation, tempo, pressing, defensive_line, width, powerplay_enabled FROM tactics WHERE club_id=?"
