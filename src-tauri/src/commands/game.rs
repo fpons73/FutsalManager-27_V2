@@ -67,6 +67,25 @@ pub struct StandingRow {
 #[derive(sqlx::FromRow)]
 struct FixtureRaw { id:i64, round:i64, leg:i64, aggregate_home_score:i64, aggregate_away_score:i64, date:String, home_id:i64, home_name:String, home_short:String, away_id:i64, away_name:String, away_short:String, home_score:i64, away_score:i64, status:String, competition_type:String, cup_winner_id:Option<i64>, extra:i64, penalties:i64, penalty_home:i64, penalty_away:i64 }
 
+#[derive(Serialize, sqlx::FromRow)]
+pub struct PlayerStatRow {
+    pub player_id: i64,
+    pub player_name: String,
+    pub club_id: i64,
+    pub club_name: String,
+    pub appearances: i64,
+    pub minutes_played: i64,
+    pub goals: i64,
+    pub assists: i64,
+    pub shots: i64,
+    pub shots_on_target: i64,
+    pub yellow_cards: i64,
+    pub red_cards: i64,
+    pub clean_sheets: i64,
+    pub saves: i64,
+    pub average_rating: f64,
+}
+
 #[derive(Serialize)]
 pub struct FixtureRow {
     pub id: i64,
@@ -308,6 +327,15 @@ pub async fn get_competitions(state: State<'_, AppState>) -> Result<Vec<CompRow>
     let pool = get_pool(&state).await?;
     let rows: Vec<(i64, String, String, String, String, i64, Option<i64>, Option<String>, i64, i64, i64)> = sqlx::query_as("SELECT comp.id, comp.name, COALESCE(n.name,'Internacional'), comp.kind, comp.competition_type, comp.knockout_rounds, h.club_id, cl.name, comp.group_count, comp.teams_per_group, comp.group_qualifiers FROM competitions comp LEFT JOIN nations n ON n.id=comp.nation_id LEFT JOIN competition_honours h ON h.competition_id=comp.id AND h.season=(SELECT season FROM game_state WHERE id=1) LEFT JOIN clubs cl ON cl.id=h.club_id ORDER BY comp.kind, comp.id").fetch_all(&pool).await.map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(|(id, name, nation, kind, competition_type, knockout_rounds, champion_id, champion_name, group_count, teams_per_group, group_qualifiers)| CompRow { id, name, nation, kind, competition_type, knockout_rounds, champion_id, champion_name, group_count, teams_per_group, group_qualifiers }).collect())
+}
+
+#[tauri::command]
+pub async fn get_player_statistics(state: State<'_, AppState>, competition_id: i64, category: Option<String>) -> Result<Vec<PlayerStatRow>, String> {
+    let pool = get_pool(&state).await?;
+    let order = match category.as_deref() { Some("assists") => "assists DESC, goals DESC", Some("rating") => "(rating_total / CASE WHEN appearances=0 THEN 1 ELSE appearances END) DESC, minutes_played DESC", Some("minutes") => "minutes_played DESC, goals DESC", Some("clean_sheets") => "clean_sheets DESC, saves DESC", Some("saves") => "saves DESC, clean_sheets DESC", _ => "goals DESC, assists DESC, minutes_played DESC" };
+    let query = format!("SELECT s.player_id,p.common_name,s.club_id,c.name,s.appearances,s.minutes_played,s.goals,s.assists,s.shots,s.shots_on_target,s.yellow_cards,s.red_cards,COALESCE(s.clean_sheets,0),COALESCE(s.saves,0),s.rating_total/CASE WHEN s.appearances=0 THEN 1 ELSE s.appearances END FROM player_season_stats s JOIN players p ON p.id=s.player_id JOIN clubs c ON c.id=s.club_id WHERE s.competition_id=? AND s.season=(SELECT season FROM game_state WHERE id=1) ORDER BY {} LIMIT 100", order);
+    let rows: Vec<PlayerStatRow> = sqlx::query_as(&query).bind(competition_id).fetch_all(&pool).await.map_err(|e| e.to_string())?;
+    Ok(rows)
 }
 
 #[tauri::command]

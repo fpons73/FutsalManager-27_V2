@@ -300,6 +300,20 @@ async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, s
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
         .bind(info.match_id).bind(info.home_club_id).bind(info.away_club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?; }
+    let season: (String,) = sqlx::query_as("SELECT season FROM matches WHERE id=?").bind(info.match_id).fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
+    for p in &snapshot.players {
+        let club_id = if p.team_id == 0 { info.home_club_id } else { info.away_club_id };
+        let minutes = if p.on_pitch { (snapshot.time_seconds / 60).min(40) as i64 } else { 0 };
+        let goals = snapshot.events.iter().filter(|e| e.player_id == Some(p.id) && (e.kind == "goal" || e.kind == "double_penalty_goal")).count() as i64;
+        let assists = snapshot.events.iter().filter(|e| e.assist_player_id == Some(p.id)).count() as i64;
+        let shots = snapshot.events.iter().filter(|e| e.player_id == Some(p.id) && ["goal", "double_penalty_goal", "shot_off", "save"].contains(&e.kind.as_str())).count() as i64;
+        let shots_on = snapshot.events.iter().filter(|e| e.player_id == Some(p.id) && ["goal", "double_penalty_goal", "save"].contains(&e.kind.as_str())).count() as i64;
+        let fouls = snapshot.events.iter().filter(|e| e.player_id == Some(p.id) && e.kind == "foul").count() as i64;
+        sqlx::query("INSERT INTO match_player_stats(match_id,player_id,club_id,started,minutes_played,goals,assists,shots,shots_on_target,fouls_committed,rating) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(match_id,player_id) DO UPDATE SET minutes_played=excluded.minutes_played,goals=excluded.goals,shots=excluded.shots,shots_on_target=excluded.shots_on_target,fouls_committed=excluded.fouls_committed,rating=excluded.rating")
+            .bind(info.match_id).bind(p.id as i64).bind(club_id).bind((p.on_pitch) as i64).bind(minutes).bind(goals).bind(assists).bind(shots).bind(shots_on).bind(fouls).bind(6.0_f64).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("INSERT INTO player_season_stats(season,competition_id,player_id,club_id,appearances,starts,minutes_played,goals,assists,shots,shots_on_target,fouls_committed,rating_total,clean_sheets,saves) SELECT ?,m.competition_id,?,?,?,?,?,?,?,?,?,?,? FROM matches m WHERE m.id=? ON CONFLICT(season,competition_id,player_id) DO UPDATE SET appearances=appearances+excluded.appearances,starts=starts+excluded.starts,minutes_played=minutes_played+excluded.minutes_played,goals=goals+excluded.goals,shots=shots+excluded.shots,shots_on_target=shots_on_target+excluded.shots_on_target,fouls_committed=fouls_committed+excluded.fouls_committed,rating_total=rating_total+excluded.rating_total")
+            .bind(&season.0).bind(p.id as i64).bind(club_id).bind((minutes > 0) as i64).bind(p.on_pitch as i64).bind(minutes).bind(goals).bind(assists).bind(shots).bind(shots_on).bind(fouls).bind(6.0_f64).bind(0_i64).bind(0_i64).bind(info.match_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    }
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }

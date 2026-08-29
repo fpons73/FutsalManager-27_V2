@@ -136,6 +136,7 @@ pub struct MatchEvent {
     pub kind: String,
     pub team_id: u32,
     pub player_id: Option<u32>,
+    pub assist_player_id: Option<u32>,
     pub description: String,
     pub x: f32,
     pub y: f32,
@@ -209,6 +210,7 @@ pub struct MatchEngine {
     pub ball_x: f32,
     pub ball_y: f32,
     pub ball_holder: Option<u32>,
+    pub last_passer: Option<u32>,
     pub possession: [u32; 2],
     pub rules: FutsalRules,
     pub time: u32,
@@ -272,6 +274,7 @@ impl MatchEngine {
             ball_x: 20.0,
             ball_y: 10.0,
             ball_holder: None,
+            last_passer: None,
             possession: [0, 0],
             rules: FutsalRules::default(),
             time: 0,
@@ -342,7 +345,7 @@ impl MatchEngine {
                 self.tactics[team] = auto.tactics;
                 self.automation_applied[team] = true;
                 self.reset_positions();
-                self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"tactical_automation".into(), team_id:team as u32, player_id:None, description:"Automatismo táctico activado".into(), x:20.0, y:10.0 });
+                self.events.push(MatchEvent { minute:self.time/60, second:self.time%60,kind: "tactical_automation".into(), team_id:team as u32, player_id:None, assist_player_id:None, description:"Automatismo táctico activado".into(), x:20.0, y:10.0 });
             }
         }
     }
@@ -350,7 +353,7 @@ impl MatchEngine {
     pub fn update_live_tactics(&mut self, team: usize, tactics: EngineTactics) -> Result<(), String> {
         if team > 1 { return Err("Equipo inválido".into()); }
         self.tactics[team] = tactics;
-        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"tactical_change".into(), team_id:team as u32, player_id:None, description:"Ajustes tácticos modificados".into(), x:20.0, y:10.0 });
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"tactical_change".into(), team_id:team as u32, player_id:None, assist_player_id:None, description:"Ajustes tácticos modificados".into(), x:20.0, y:10.0 });
         Ok(())
     }
 
@@ -366,7 +369,7 @@ impl MatchEngine {
             if p.id == out_id { p.on_pitch = false; }
             if p.id == in_id { p.on_pitch = true; p.stamina_now = 95.0; let (x,y) = tactical_target(p.role, p.team_id, false, self.tactics[team]); p.x=x; p.y=y; }
         }
-        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"manual_substitution".into(), team_id:team as u32, player_id:Some(in_id), description:format!("Cambio manual: entra {} por {}", in_id, out_id), x:self.ball_x, y:self.ball_y });
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"manual_substitution".into(), team_id:team as u32, player_id:Some(in_id), assist_player_id:None, description:format!("Cambio manual: entra {} por {}", in_id, out_id), x:self.ball_x, y:self.ball_y });
         Ok(())
     }
 
@@ -375,7 +378,7 @@ impl MatchEngine {
         if self.timeouts_used[team] >= self.rules.timeouts_per_half { return Err("No quedan tiempos muertos en esta parte".into()); }
         self.timeouts_used[team] += 1;
         self.timeout_until = self.time + 60;
-        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"timeout".into(), team_id:team as u32, player_id:None, description:"Tiempo muerto solicitado".into(), x:20.0, y:10.0 });
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"timeout".into(), team_id:team as u32, player_id:None, assist_player_id:None, description:"Tiempo muerto solicitado".into(), x:20.0, y:10.0 });
         Ok(())
     }
 
@@ -395,7 +398,7 @@ impl MatchEngine {
         self.half = 1;
         self.events.push(MatchEvent {
             minute: 0, second: 0, kind: "kickoff".into(), team_id: 0,
-            player_id: self.ball_holder, description: "Inicio del partido".into(), x: 20.0, y: 10.0,
+            player_id: self.ball_holder, assist_player_id: None, description: "Inicio del partido".into(), x: 20.0, y: 10.0,
         });
     }
 
@@ -420,7 +423,7 @@ impl MatchEngine {
             self.powerplay = [false, false];
             self.timeouts_used = [0, 0];
             new_events.push(MatchEvent {
-                minute: 20, second: 0, kind: "halftime".into(), team_id: 0, player_id: None,
+                minute: 20, second: 0, kind: "halftime".into(), team_id: 0, player_id: None, assist_player_id: None,
                 description: "Descanso".into(), x: 20.0, y: 10.0,
             });
             self.events.extend(new_events.clone());
@@ -437,7 +440,7 @@ impl MatchEngine {
         if self.time >= self.rules.total_seconds {
             self.state = MatchState::Finished;
             new_events.push(MatchEvent {
-                minute: 40, second: 0, kind: "finished".into(), team_id: 0, player_id: None,
+                minute: 40, second: 0, kind: "finished".into(), team_id: 0, player_id: None, assist_player_id: None,
                 description: format!("Final {}-{}", self.score[0], self.score[1]),
                 x: 20.0, y: 10.0,
             });
@@ -545,7 +548,7 @@ impl MatchEngine {
             }
             self.events.push(MatchEvent {
                 minute: self.time / 60, second: self.time % 60, kind: "substitution".into(),
-                team_id: team as u32, player_id: Some(in_id),
+                team_id: team as u32, player_id: Some(in_id), assist_player_id: None,
                 description: format!("Cambio: entra {} por {}", in_id, out_id),
                 x: self.ball_x, y: self.ball_y,
             });
@@ -585,8 +588,8 @@ impl MatchEngine {
                 self.ball_x = 20.0; self.ball_y = 10.0;
                 return Some(MatchEvent {
                     minute: self.time / 60, second: self.time % 60, kind: "goal".into(),
-                    team_id: holder_team, player_id: Some(holder),
-                    description: format!("GOOOOL de {}!", holder),
+                    team_id: holder_team, player_id: Some(holder), assist_player_id: self.last_passer.filter(|p| *p != holder),
+                    description: match self.last_passer { Some(p) if p != holder => format!("GOOOOL de {}! Asistencia de {}", holder, p), _ => format!("GOOOOL de {}!", holder) },
                     x: holder_x, y: holder_y,
                 });
             } else if roll < final_prob + 0.25 {
@@ -594,7 +597,7 @@ impl MatchEngine {
                 self.ball_holder = self.players.iter().find(|p| p.team_id == opp_team && p.role == Role::POR && p.on_pitch).map(|p| p.id);
                 return Some(MatchEvent {
                     minute: self.time / 60, second: self.time % 60, kind: "save".into(),
-                    team_id: opp_team, player_id: gk.map(|g| g.id),
+                    team_id: opp_team, player_id: gk.map(|g| g.id), assist_player_id: None,
                     description: "Parada del portero".into(), x: holder_x, y: holder_y,
                 });
             } else {
@@ -602,7 +605,7 @@ impl MatchEngine {
                 self.ball_holder = self.on_pitch_ids[recov as usize].choose(&mut self.rng).copied();
                 return Some(MatchEvent {
                     minute: self.time / 60, second: self.time % 60, kind: "shot_off".into(),
-                    team_id: holder_team, player_id: Some(holder),
+                    team_id: holder_team, player_id: Some(holder), assist_player_id: None,
                     description: "Tiro fuera".into(), x: holder_x, y: holder_y,
                 });
             }
@@ -621,6 +624,7 @@ impl MatchEngine {
 
         match result {
             DuelResult::Success => {
+                self.last_passer = Some(holder);
                 self.ball_holder = Some(target);
                 if let Some(tp) = self.players.iter().find(|p| p.id == target) {
                     self.ball_x = tp.x; self.ball_y = tp.y;
@@ -638,7 +642,7 @@ impl MatchEngine {
                         self.score[holder_team as usize] += 1;
                         self.events.push(MatchEvent {
                             minute: self.time / 60, second: self.time % 60, kind: "double_penalty_goal".into(),
-                            team_id: holder_team, player_id: Some(holder),
+                            team_id: holder_team, player_id: Some(holder), assist_player_id: None,
                             description: "Gol de doble penalti!".into(), x: 30.0, y: 10.0,
                         });
                     }
@@ -646,14 +650,14 @@ impl MatchEngine {
                     self.ball_holder = self.on_pitch_ids[opp_team as usize].first().copied();
                     return Some(MatchEvent {
                         minute: self.time / 60, second: self.time % 60, kind: "double_penalty".into(),
-                        team_id: holder_team, player_id: Some(holder),
+                        team_id: holder_team, player_id: Some(holder), assist_player_id: None,
                         description: "Doble penalti por 6ª falta".into(), x: 30.0, y: 10.0,
                     });
                 }
                 self.ball_holder = Some(holder);
                 Some(MatchEvent {
                     minute: self.time / 60, second: self.time % 60, kind: "foul".into(),
-                    team_id: opp_team, player_id: defender,
+                    team_id: opp_team, player_id: defender, assist_player_id: None,
                     description: format!("Falta de {} ({}ª del equipo)", defender.unwrap_or(0), self.fouls[opp_team as usize]),
                     x: holder_x, y: holder_y,
                 })
@@ -664,7 +668,7 @@ impl MatchEngine {
                     self.possession[opp_team as usize] += 1;
                     return Some(MatchEvent {
                         minute: self.time / 60, second: self.time % 60, kind: "interception".into(),
-                        team_id: opp_team, player_id: Some(did),
+                        team_id: opp_team, player_id: Some(did), assist_player_id: None,
                         description: "Intercepción".into(), x: holder_x, y: holder_y,
                     });
                 }
@@ -689,10 +693,40 @@ impl MatchEngine {
         self.snapshot()
     }
 
+    pub fn player_stats(&self) -> Vec<(u32, u32, bool, u32, u32, u32, u32, u32, u32, u32, u32, f64)> {
+        let mut stats: std::collections::HashMap<u32, (u32, u32, bool, u32, u32, u32, u32, u32, u32, u32, u32, f64)> = std::collections::HashMap::new();
+        for player in &self.players {
+            stats.insert(player.id, (player.id, player.team_id, false, 0, 0, 0, 0, 0, 0, 0, 0, 6.0));
+        }
+        for player in &self.players {
+            if player.on_pitch {
+                if let Some(s) = stats.get_mut(&player.id) { s.2 = true; }
+            }
+        }
+        for event in &self.events {
+            if let Some(pid) = event.player_id {
+                if let Some(s) = stats.get_mut(&pid) {
+                    match event.kind.as_str() {
+                        "goal" | "double_penalty_goal" => s.4 += 1,
+                        "shot_off" => s.5 += 1,
+                        "save" => { s.5 += 1; s.6 += 1; }
+                        "foul" => s.7 += 1,
+                        "yellow_card" => s.8 += 1,
+                        "red_card" => s.9 += 1,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let minutes = (self.time / 60).min(40);
+        for s in stats.values_mut() { s.3 = if s.2 { minutes } else { 0 }; }
+        stats.into_values().collect()
+    }
+
     pub fn resolve_knockout_tie(&mut self) {
         if self.score[0] != self.score[1] { return; }
         self.went_to_extra_time = true;
-        self.events.push(MatchEvent { minute: 40, second: 0, kind: "extra_time".into(), team_id: 0, player_id: None, description: "Comienza la prórroga".into(), x: 20.0, y: 10.0 });
+        self.events.push(MatchEvent { minute: 40, second: 0, kind: "extra_time".into(), team_id: 0, player_id: None, assist_player_id: None, description: "Comienza la prórroga".into(), x: 20.0, y: 10.0 });
         for _ in 0..self.rules.extra_time_seconds {
             if self.rng.gen_bool(0.002) { self.score[(self.rng.gen::<bool>()) as usize] += 1; }
         }
@@ -707,7 +741,7 @@ impl MatchEngine {
                 if self.rng.gen_bool(0.72) { self.penalty_score[0] += 1; }
                 if self.rng.gen_bool(0.72) { self.penalty_score[1] += 1; }
             }
-            self.events.push(MatchEvent { minute: 45, second: 0, kind: "penalties".into(), team_id: 0, player_id: None, description: format!("Penaltis {}-{}", self.penalty_score[0], self.penalty_score[1]), x: 20.0, y: 10.0 });
+            self.events.push(MatchEvent { minute: 45, second: 0, kind: "penalties".into(), team_id: 0, player_id: None, assist_player_id: None, description: format!("Penaltis {}-{}", self.penalty_score[0], self.penalty_score[1]), x: 20.0, y: 10.0 });
         }
     }
 

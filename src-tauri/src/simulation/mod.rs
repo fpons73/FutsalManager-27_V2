@@ -35,6 +35,8 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             .bind(home_goals).bind(away_goals).bind(home_shots).bind(away_shots).bind(home_fouls).bind(away_fouls).bind(snap.possession[0] as i64).bind(snap.possession[1] as i64).bind(mid)
             .execute(pool).await.map_err(|e| e.to_string())?;
 
+        persist_player_statistics(pool, mid, comp_id, &snap, hid, aid).await?;
+
         for ev in &snap.events {
             if ev.kind == "goal" || ev.kind == "double_penalty_goal" || ev.kind == "foul" || ev.kind == "double_penalty" {
                 let club_for_event = if ev.team_id == 0 { hid } else { aid };
@@ -157,6 +159,32 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         matches_played: results.len() as i64,
         results,
     })
+}
+
+fn snap_stats(snap: &crate::engine::MatchSnapshot) -> Vec<(u32,u32,bool,u32,u32,u32,u32,u32,u32,u32,u32,f64)> {
+    let mut map = std::collections::HashMap::new();
+    for p in &snap.players { map.insert(p.id, (p.id, p.team_id, p.on_pitch, if p.on_pitch { (snap.time_seconds/60).min(40) } else { 0 }, 0, 0, 0, 0, 0, 0, 0, 6.0)); }
+    for e in &snap.events { if let Some(pid)=e.player_id { if let Some(s)=map.get_mut(&pid) { match e.kind.as_str() { "goal"|"double_penalty_goal"=>{s.4+=1;if let Some(a)=e.assist_player_id{if let Some(asst)=map.get_mut(&a){asst.10+=1;}}}, "shot_off"=>s.5+=1, "save"=>{s.5+=1;s.6+=1}, "foul"=>s.7+=1, "yellow_card"=>s.8+=1, "red_card"=>s.9+=1, _=>{} } } } }
+    map.into_values().collect()
+}
+
+async fn player_id_is_goalkeeper(pool: &SqlitePool, player_id: i64) -> Result<bool, String> {
+    let row: (i64,) = sqlx::query_as("SELECT por_natural FROM player_positions WHERE player_id=?").bind(player_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0,));
+    Ok(row.0 >= 18)
+}
+
+async fn persist_player_statistics(pool: &SqlitePool, match_id: i64, competition_id: i64, snap: &crate::engine::MatchSnapshot, home_id: i64, away_id: i64) -> Result<(), String> {
+    let season: (String,) = sqlx::query_as("SELECT season FROM matches WHERE id=?").bind(match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    for (player_id, team_id, started, minutes, goals, shots, shots_on, fouls, yellow, red, assists, rating) in snap_stats(snap) {
+        let club_id = if team_id == 0 { home_id } else { away_id };
+        sqlx::query("INSERT INTO match_player_stats(match_id,player_id,club_id,started,minutes_played,goals,assists,shots,shots_on_target,fouls_committed,yellow_cards,red_cards,rating) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(match_id,player_id) DO UPDATE SET minutes_played=excluded.minutes_played,goals=excluded.goals,assists=excluded.assists,shots=excluded.shots,shots_on_target=excluded.shots_on_target,fouls_committed=excluded.fouls_committed,rating=excluded.rating")
+            .bind(match_id).bind(player_id as i64).bind(club_id).bind(started as i64).bind(minutes as i64).bind(goals as i64).bind(assists as i64).bind(shots as i64).bind(shots_on as i64).bind(fouls as i64).bind(yellow as i64).bind(red as i64).bind(rating).execute(pool).await.map_err(|e| e.to_string())?;
+        let clean_sheets = if player_id_is_goalkeeper(pool, player_id as i64).await? && ((team_id == 0 && snap.score[1] == 0) || (team_id == 1 && snap.score[0] == 0)) { 1 } else { 0 };
+        let saves = snap.events.iter().filter(|e| e.player_id == Some(player_id) && e.kind == "save").count() as i64;
+        sqlx::query("INSERT INTO player_season_stats(season,competition_id,player_id,club_id,appearances,starts,minutes_played,goals,assists,shots,shots_on_target,fouls_committed,yellow_cards,red_cards,rating_total,clean_sheets,saves) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(season,competition_id,player_id) DO UPDATE SET appearances=appearances+excluded.appearances,starts=starts+excluded.starts,minutes_played=minutes_played+excluded.minutes_played,goals=goals+excluded.goals,assists=assists+excluded.assists,shots=shots+excluded.shots,shots_on_target=shots_on_target+excluded.shots_on_target,fouls_committed=fouls_committed+excluded.fouls_committed,yellow_cards=yellow_cards+excluded.yellow_cards,red_cards=red_cards+excluded.red_cards,rating_total=rating_total+excluded.rating_total,clean_sheets=clean_sheets+excluded.clean_sheets,saves=saves+excluded.saves")
+            .bind(&season.0).bind(competition_id).bind(player_id as i64).bind(club_id).bind((minutes > 0) as i64).bind(started as i64).bind(minutes as i64).bind(goals as i64).bind(assists as i64).bind(shots as i64).bind(shots_on as i64).bind(fouls as i64).bind(yellow as i64).bind(red as i64).bind(rating).bind(clean_sheets).bind(saves).execute(pool).await.map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 async fn update_group_members(pool: &SqlitePool, group_id: i64, hid: i64, aid: i64, hg: i64, ag: i64) -> Result<(), String> {

@@ -36,7 +36,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Tácticas durante el partido, cambios manuales y tiempos muertos.
 - Automatismos tácticos entrenables, configurables y aplicados contextualmente durante la simulación.
 - IA táctica reactiva y estilos persistentes por club.
-- Estadísticas individuales, análisis postpartido, crónicas y gráficos.
+- Estadísticas individuales por partido/temporada y rankings iniciales; análisis postpartido, asistencias avanzadas, porterías imbatidas y gráficos aún pendientes.
 - Historial de temporadas, palmarés, récords y evolución de jugadores.
 - Noticias, medios, rumores y reputación pública.
 - Economía avanzada: viajes, personal, instalaciones, merchandising y TV.

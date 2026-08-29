@@ -40,14 +40,16 @@
 
 ## Prioridad 4 — Historial y estadísticas
 
-- [ ] Estadísticas individuales por partido y temporada.
-- [ ] Goles, asistencias, tarjetas y minutos.
-- [ ] Porterías imbatidas y estadísticas de porteros.
-- [ ] Máximos goleadores y asistentes.
+- [x] Estadísticas individuales por partido y temporada.
+- [x] Goles, asistencias, tiros, faltas, tarjetas y minutos.
+- [x] Porterías imbatidas y estadísticas avanzadas de porteros.
+- [x] Máximos goleadores, asistentes, minutos y valoración mediante rankings.
 - [ ] Récords de clubes y competiciones.
 - [ ] Evolución histórica de CA, PA y atributos.
 - [ ] Historial completo de jugadores y clubes.
 - [ ] Gráficos comparativos y filtros por temporada.
+
+> Hito local actual: estadísticas persistentes para partidos automáticos y manuales, rankings por competición, métricas de disciplina y porterías imbatidas/paradas de portero. Las asistencias se atribuyen mediante el último pasador registrado por el motor de eventos.
 
 ## Prioridad 5 — Inmersión y dirección
 
