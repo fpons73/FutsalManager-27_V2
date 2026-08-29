@@ -6,4 +6,8 @@
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 999px; }
 
-body { @apply bg-fm-bg text-fm-text antialiased; }
+body { @apply bg-fm-bg text-fm-text antialiased; background-image: radial-gradient(circle at 15% -10%, rgba(34,211,197,.12), transparent 32rem), radial-gradient(circle at 90% 0%, rgba(96,165,250,.08), transparent 28rem); }
+
+button, select, input { transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease; }
+button:active { transform: translateY(1px); }
+

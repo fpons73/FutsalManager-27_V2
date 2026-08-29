@@ -53,7 +53,9 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
   const [first, setFirst] = useState(player.first_name ?? "");
   const [last, setLast] = useState(player.last_name ?? "");
   const [nationId, setNationId] = useState(player.nation_id ?? 1);
+  const [secondNationId, setSecondNationId] = useState<number | null>(player.second_nation_id ?? null);
   const [clubId, setClubId] = useState<string>(player.club_id ? String(player.club_id) : "");
+  const [secondaryPosition, setSecondaryPosition] = useState(player.secondary_position ?? "");
   const [attrs, setAttrs] = useState<Attr | null>(null);
   const [autoCalc, setAutoCalc] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
 
   const saveIdentity = async () => {
     try {
-      await invoke("editor_update_player", { id: player.id, first, last, nationId, clubId: clubId ? Number(clubId) : null, ca: attrs?.ca ?? 0, pa: attrs?.pa ?? 0, pos: attrs?.position ?? player.position });
+      await invoke("editor_update_player", { id: player.id, first, last, nationId, secondNationId, secondaryPosition: secondaryPosition || null, clubId: clubId ? Number(clubId) : null, ca: attrs?.ca ?? 0, pa: attrs?.pa ?? 0, pos: attrs?.position ?? player.position });
       setMsg("Identidad guardada");
     } catch (e) { setMsg(String(e)); }
   };
@@ -101,7 +103,7 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
   return (
     <div className="rounded-xl border border-sky-500/30 bg-fm-panel p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-black">Jugador · {player.first_name} {player.last_name} <span className="text-fm-dim">(ID {player.id})</span></h3>
+        <h3 className="text-lg font-black"><span className="mr-2 inline-flex items-center gap-1"><img src={player.flag_path ?? undefined} alt={player.nation} title={player.nation} className="h-4 w-6 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{player.second_flag_path && <img src={player.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-4 w-6 rounded object-cover" />}</span>Jugador · {player.first_name} {player.last_name} <span className="text-fm-dim">(ID {player.id})</span></h3>
         <button onClick={onClose} className="rounded-lg border border-fm-border px-3 py-1 text-sm text-fm-dim hover:text-white">Cerrar</button>
       </div>
       {msg && <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">{msg}</div>}
@@ -112,11 +114,12 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
           <div className="space-y-2 text-sm">
             <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Nombre</label><input value={first} onChange={(e)=>setFirst(e.target.value)} className="w-full rounded border border-fm-border bg-fm-bg px-2 py-1" /></div>
             <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Apellidos</label><input value={last} onChange={(e)=>setLast(e.target.value)} className="w-full rounded border border-fm-border bg-fm-bg px-2 py-1" /></div>
-            <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Nacionalidad</label>
+            <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Nacionalidad principal</label>
               <select value={nationId} onChange={(e)=>setNationId(Number(e.target.value))} className="w-full rounded border border-fm-border bg-fm-bg px-2 py-1">
                 {nations.map((n:any)=><option key={n.id} value={n.id}>{n.name}</option>)}
               </select>
             </div>
+            <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Segunda nacionalidad</label><select value={secondNationId ?? ""} onChange={(e)=>setSecondNationId(Number(e.target.value)||null)} className="w-full rounded border border-fm-border bg-fm-bg px-2 py-1"><option value="">Ninguna</option>{nations.map((n:any)=><option key={n.id} value={n.id}>{n.name}</option>)}</select></div>
             <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Club ID</label><input value={clubId} onChange={(e)=>setClubId(e.target.value)} className="w-full rounded border border-fm-border bg-fm-bg px-2 py-1" /></div>
             <button onClick={saveIdentity} className="mt-1 w-full rounded bg-fm-accent px-2 py-1.5 text-sm font-bold text-black">Guardar identidad</button>
           </div>
@@ -125,11 +128,12 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
         <div className="lg:col-span-2 space-y-4 rounded-lg border border-fm-border bg-fm-bg p-3">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-fm-dim">Posición</label>
+              <label className="block text-[10px] uppercase tracking-wider text-fm-dim">Posición principal</label>
               <select value={attrs.position} onChange={(e)=>setAttrs((a)=> a ? ({ ...(a as any), position: e.target.value }) : a)} className="rounded border border-fm-border bg-fm-panel px-2 py-1 text-sm">
                 {["POR","CIE","ALA","PIV","UNI"].map((p)=> <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
+            <div><label className="block text-[10px] uppercase tracking-wider text-fm-dim">Posición secundaria</label><select value={secondaryPosition} onChange={(e)=>setSecondaryPosition(e.target.value)} className="rounded border border-fm-border bg-fm-panel px-2 py-1 text-sm"><option value="">Ninguna</option>{["POR","CIE","ALA","PIV","UNI"].map((p)=><option key={p}>{p}</option>)}</select></div>
             <Num label="CA (Calidad Actual)" v={attrs.ca} max={200} onChange={(n)=>setAttrs((a)=> a ? ({ ...(a as any), ca: n }) : a)} auto={autoCalc} />
             <Num label="CP (Potencial)" v={attrs.pa} max={200} onChange={(n)=>setAttrs((a)=> a ? ({ ...(a as any), pa: n }) : a)} />
           </div>

@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS tactical_automations (
+  id INTEGER PRIMARY KEY,
+  club_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL,
+  threshold INTEGER NOT NULL DEFAULT 50,
+  formation TEXT NOT NULL DEFAULT '3-1',
+  tempo INTEGER NOT NULL DEFAULT 50,
+  pressing INTEGER NOT NULL DEFAULT 50,
+  defensive_line INTEGER NOT NULL DEFAULT 50,
+  width INTEGER NOT NULL DEFAULT 50,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  training_level INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(club_id, name),
+  FOREIGN KEY(club_id) REFERENCES clubs(id) ON DELETE CASCADE
+);

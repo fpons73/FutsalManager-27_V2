@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS staff (
     last_name TEXT NOT NULL,
     common_name TEXT,
     nation_id INTEGER REFERENCES nations(id),
-    role TEXT NOT NULL CHECK(role IN ('coach','assistant','scout','physio')),
+    role TEXT NOT NULL CHECK(role IN ('coach','assistant','scout','physio','fitness_coach','goalkeeper_coach','technical_coach','analyst')),
     club_id INTEGER REFERENCES clubs(id),
     tactical INTEGER DEFAULT 10,
     man_management INTEGER DEFAULT 10,

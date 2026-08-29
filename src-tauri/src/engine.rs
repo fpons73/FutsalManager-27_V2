@@ -8,6 +8,7 @@ pub struct FutsalRules {
     pub half_seconds: u32,
     pub half_time_seconds: u32,
     pub total_seconds: u32,
+    pub extra_time_seconds: u32,
     pub fouls_for_double: u8,
     pub timeouts_per_half: u8,
     pub kick_in_seconds: u8,
@@ -19,6 +20,7 @@ impl Default for FutsalRules {
             half_seconds: 20 * 60,
             half_time_seconds: 10 * 60,
             total_seconds: 40 * 60,
+            extra_time_seconds: 5 * 60,
             fouls_for_double: 6,
             timeouts_per_half: 1,
             kick_in_seconds: 4,
@@ -159,6 +161,10 @@ pub struct MatchSnapshot {
     pub score: [u8; 2],
     pub fouls: [u8; 2],
     pub shots: [u32; 2],
+    pub yellow_cards: [u8; 2],
+    pub red_cards: [u8; 2],
+    pub powerplay: [bool; 2],
+    pub timeouts_used: [u8; 2],
     pub possession: [u8; 2],
     pub players: Vec<PlayerSnapshot>,
     pub ball: (f32, f32),
@@ -202,15 +208,22 @@ pub struct MatchEngine {
     pub half: u8,
     pub state: MatchState,
     pub score: [u8; 2],
+    pub went_to_extra_time: bool,
+    pub went_to_penalties: bool,
+    pub penalty_score: [u8; 2],
     pub fouls: [u8; 2],
     pub shots: [u32; 2],
     pub shots_on: [u32; 2],
+    pub yellow_cards: [u8; 2],
+    pub red_cards: [u8; 2],
     pub events: Vec<MatchEvent>,
     pub rng: StdRng,
     pub powerplay: [bool; 2],
     pub bench: [Vec<u32>; 2],
     pub tactics: [EngineTactics; 2],
     pub allow_powerplay: [bool; 2],
+    pub timeouts_used: [u8; 2],
+    pub timeout_until: u32,
     on_pitch_ids: [Vec<u32>; 2],
 }
 
@@ -256,15 +269,22 @@ impl MatchEngine {
             half: 1,
             state: MatchState::PreMatch,
             score: [0, 0],
+            went_to_extra_time: false,
+            went_to_penalties: false,
+            penalty_score: [0, 0],
             fouls: [0, 0],
             shots: [0, 0],
             shots_on: [0, 0],
+            yellow_cards: [0, 0],
+            red_cards: [0, 0],
             events: Vec::new(),
             rng: StdRng::from_entropy(),
             powerplay: [false, false],
             bench,
             tactics: [EngineTactics::default(), EngineTactics::default()],
             allow_powerplay: [true, true],
+            timeouts_used: [0, 0],
+            timeout_until: 0,
             on_pitch_ids: on_pitch,
         };
         eng.reset_positions();
@@ -288,6 +308,38 @@ impl MatchEngine {
 
     pub fn set_allow_powerplay(&mut self, team: usize, enabled: bool) {
         if team < 2 { self.allow_powerplay[team] = enabled; }
+    }
+
+    pub fn update_live_tactics(&mut self, team: usize, tactics: EngineTactics) -> Result<(), String> {
+        if team > 1 { return Err("Equipo inválido".into()); }
+        self.tactics[team] = tactics;
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"tactical_change".into(), team_id:team as u32, player_id:None, description:"Ajustes tácticos modificados".into(), x:20.0, y:10.0 });
+        Ok(())
+    }
+
+    pub fn manual_substitution(&mut self, team: usize, out_id: u32, in_id: u32) -> Result<(), String> {
+        if team > 1 { return Err("Equipo inválido".into()); }
+        if !self.on_pitch_ids[team].contains(&out_id) { return Err("El jugador que sale no está en pista".into()); }
+        let bench_pos = self.bench[team].iter().position(|&id| id == in_id).ok_or("El jugador que entra no está en el banquillo")?;
+        self.bench[team].remove(bench_pos);
+        self.bench[team].push(out_id);
+        let slot = self.on_pitch_ids[team].iter().position(|&id| id == out_id).unwrap();
+        self.on_pitch_ids[team][slot] = in_id;
+        for p in &mut self.players {
+            if p.id == out_id { p.on_pitch = false; }
+            if p.id == in_id { p.on_pitch = true; p.stamina_now = 95.0; let (x,y) = tactical_target(p.role, p.team_id, false, self.tactics[team]); p.x=x; p.y=y; }
+        }
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"manual_substitution".into(), team_id:team as u32, player_id:Some(in_id), description:format!("Cambio manual: entra {} por {}", in_id, out_id), x:self.ball_x, y:self.ball_y });
+        Ok(())
+    }
+
+    pub fn call_timeout(&mut self, team: usize) -> Result<(), String> {
+        if team > 1 { return Err("Equipo inválido".into()); }
+        if self.timeouts_used[team] >= self.rules.timeouts_per_half { return Err("No quedan tiempos muertos en esta parte".into()); }
+        self.timeouts_used[team] += 1;
+        self.timeout_until = self.time + 60;
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"timeout".into(), team_id:team as u32, player_id:None, description:"Tiempo muerto solicitado".into(), x:20.0, y:10.0 });
+        Ok(())
     }
 
     fn reset_positions(&mut self) {
@@ -320,6 +372,7 @@ impl MatchEngine {
         if self.state == MatchState::Finished || self.state == MatchState::PreMatch || self.state == MatchState::HalfTime {
             return Vec::new();
         }
+        if self.timeout_until > self.time { self.time += 1; return Vec::new(); }
 
         let mut new_events = Vec::new();
         self.time += 1;
@@ -328,6 +381,7 @@ impl MatchEngine {
             self.state = MatchState::HalfTime;
             self.fouls = [0, 0];
             self.powerplay = [false, false];
+            self.timeouts_used = [0, 0];
             new_events.push(MatchEvent {
                 minute: 20, second: 0, kind: "halftime".into(), team_id: 0, player_id: None,
                 description: "Descanso".into(), x: 20.0, y: 10.0,
@@ -596,6 +650,28 @@ impl MatchEngine {
         self.snapshot()
     }
 
+    pub fn resolve_knockout_tie(&mut self) {
+        if self.score[0] != self.score[1] { return; }
+        self.went_to_extra_time = true;
+        self.events.push(MatchEvent { minute: 40, second: 0, kind: "extra_time".into(), team_id: 0, player_id: None, description: "Comienza la prórroga".into(), x: 20.0, y: 10.0 });
+        for _ in 0..self.rules.extra_time_seconds {
+            if self.rng.gen_bool(0.002) { self.score[(self.rng.gen::<bool>()) as usize] += 1; }
+        }
+        if self.score[0] == self.score[1] {
+            self.went_to_penalties = true;
+            for i in 0..5 {
+                for team in 0..2 {
+                    if self.rng.gen_bool(if i < 3 { 0.72 } else { 0.68 }) { self.penalty_score[team] += 1; }
+                }
+            }
+            while self.penalty_score[0] == self.penalty_score[1] {
+                if self.rng.gen_bool(0.72) { self.penalty_score[0] += 1; }
+                if self.rng.gen_bool(0.72) { self.penalty_score[1] += 1; }
+            }
+            self.events.push(MatchEvent { minute: 45, second: 0, kind: "penalties".into(), team_id: 0, player_id: None, description: format!("Penaltis {}-{}", self.penalty_score[0], self.penalty_score[1]), x: 20.0, y: 10.0 });
+        }
+    }
+
     pub fn snapshot(&self) -> MatchSnapshot {
         let players = self.players.iter().map(|p| PlayerSnapshot {
             id: p.id, team_id: p.team_id, shirt: p.shirt, x: p.x, y: p.y,
@@ -613,6 +689,10 @@ impl MatchEngine {
             score: self.score,
             fouls: self.fouls,
             shots: self.shots,
+            yellow_cards: self.yellow_cards,
+            red_cards: self.red_cards,
+            powerplay: self.powerplay,
+            timeouts_used: self.timeouts_used,
             possession: poss_pct,
             players,
             ball: (self.ball_x, self.ball_y),

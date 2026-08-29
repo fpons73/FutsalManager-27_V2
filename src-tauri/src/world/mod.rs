@@ -1,5 +1,6 @@
 pub mod data;
 pub mod prd;
+pub mod iso;
 
 use chrono::NaiveDate;
 use rand::{Rng, SeedableRng};
@@ -62,13 +63,18 @@ pub async fn seed_world(pool: &SqlitePool) -> Result<(), String> {
     for comp in prd::ALL_COMPS {
         let nid = comp.nation.and_then(|n| nation_ids.get(n).copied());
         let kind = if comp.nation.is_none() { "national_team" } else { "club" };
-        let (id,): (i64,) = sqlx::query_as("INSERT INTO competitions(name,nation_id,tier,total_teams,season,format,kind) VALUES(?,?,?,?,?,?,?) RETURNING id")
-            .bind(comp.name).bind(nid).bind(comp.tier).bind(comp.teams).bind(SEASON).bind(if comp.tier.is_some() { "Round Robin" } else { "Cup" }).bind(kind)
+        let competition_type = if comp.tier.is_some() { "league" } else { "cup" };
+        let knockout_rounds = if competition_type == "cup" { 4 } else { 0 };
+        let (id,): (i64,) = sqlx::query_as("INSERT INTO competitions(name,nation_id,tier,total_teams,season,format,kind,competition_type,knockout_rounds,promotion_places,relegation_places,playoff_places) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id")
+            .bind(comp.name).bind(nid).bind(comp.tier).bind(comp.teams).bind(SEASON).bind(if comp.tier.is_some() { "Round Robin" } else { "Cup" }).bind(kind).bind(competition_type).bind(knockout_rounds).bind(if comp.tier.is_some() { 2 } else { 0 }).bind(if comp.tier.is_some() { 2 } else { 0 }).bind(0)
             .fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
         comp_ids.push(id);
     }
 
     let mut rng = StdRng::from_entropy();
+    let base_date = NaiveDate::parse_from_str(GAME_DATE, "%Y-%m-%d").unwrap();
+    seed_free_agents(&mut tx, &nation_ids, base_date, &mut rng).await?;
+    seed_free_staff(&mut tx, &nation_ids, &mut rng).await?;
     let base_date = NaiveDate::parse_from_str(GAME_DATE, "%Y-%m-%d").unwrap();
 
     // Para cada nación con ligas, cuántos clubes DISTINTOS hacen falta y sus divisiones (tier asc)
@@ -148,6 +154,8 @@ pub async fn seed_world(pool: &SqlitePool) -> Result<(), String> {
             sqlx::query("INSERT OR IGNORE INTO training_schedule(club_id, day_of_week, training_type_id, intensity) VALUES(?,?,?,?)").bind(club_id).bind(day).bind(type_id).bind(intensity).execute(&mut *tx).await.map_err(|e| e.to_string())?;
         }
         sqlx::query("INSERT OR IGNORE INTO youth_academy(club_id, level) VALUES(?,50)").bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("INSERT OR IGNORE INTO scouting_centers(club_id, knowledge_level, max_scouts) VALUES(?, ?, ?)").bind(club_id).bind((oc.rep / 10).clamp(15, 80)).bind(if oc.rep >= 700 { 3 } else if oc.rep >= 600 { 2 } else { 1 }).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        seed_staff_for_club(&mut tx, club_id, oc.nid, &oc.nation, oc.rep, &mut rng).await?;
     }
 
     // Agrupar clubes por nación, ordenados por reputación desc
@@ -177,7 +185,58 @@ pub async fn seed_world(pool: &SqlitePool) -> Result<(), String> {
 
     sqlx::query("INSERT INTO game_state(id, game_date, season, game_speed) VALUES(1, ?, ?, 'normal')").bind(GAME_DATE).bind(SEASON).execute(&mut *tx).await.map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
+    let _ = iso::import_catalog(pool).await;
     crate::competition::generate_calendars(pool).await?;
+    Ok(())
+}
+
+async fn seed_free_agents(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, nations: &std::collections::HashMap<String,i64>, base_date: NaiveDate, rng: &mut impl Rng) -> Result<(), String> {
+    let pool_nations: Vec<(&String,&i64)> = nations.iter().collect();
+    for idx in 0..24 {
+        let (nation_name, &nation_id) = pool_nations[idx % pool_nations.len()];
+        let role = ["POR","CIE","ALA","PIV","UNI"][idx % 5];
+        let age = 18 + (idx % 14) as i64;
+        let dob = base_date - chrono::Duration::days(age * 365);
+        let ca = 55 + rng.gen_range(0..35) as i64;
+        let pa = (ca + rng.gen_range(10..45) as i64).min(180);
+        let first = data::pick_first(nation_name, rng); let last = data::pick_last(nation_name, rng);
+        let secondary = ["POR","CIE","ALA","PIV","UNI"][(idx + 2) % 5];
+        let (pid,): (i64,) = sqlx::query_as("INSERT INTO players(first_name,last_name,common_name,date_of_birth,nation_id,second_nation_id,secondary_position,height_cm,weight_kg) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id").bind(first).bind(&last).bind(format!("{} {}",first,last)).bind(dob.format("%Y-%m-%d").to_string()).bind(nation_id).bind(if idx % 4 == 0 { Some(nations.values().copied().nth((idx+1)%nations.len()).unwrap()) } else { None }).bind(secondary).bind(170).bind(72).fetch_one(&mut **tx).await.map_err(|e|e.to_string())?;
+        let (por,cie,ala,piv,uni) = match role { "POR"=>(20,5,1,1,3), "CIE"=>(1,20,12,8,10), "ALA"=>(1,10,20,10,14), "PIV"=>(1,6,10,20,12), _=>(3,10,14,14,20) };
+        sqlx::query("INSERT INTO player_positions(player_id,por_natural,cie_natural,ala_natural,piv_natural,uni_natural) VALUES(?,?,?,?,?,?)").bind(pid).bind(por).bind(cie).bind(ala).bind(piv).bind(uni).execute(&mut **tx).await.map_err(|e|e.to_string())?;
+        sqlx::query("INSERT INTO player_states(player_id,current_ability,potential_ability) VALUES(?,?,?)").bind(pid).bind(ca).bind(pa).execute(&mut **tx).await.map_err(|e|e.to_string())?;
+        sqlx::query("INSERT INTO player_attributes(player_id) VALUES(?)").bind(pid).execute(&mut **tx).await.map_err(|e|e.to_string())?;
+    }
+    Ok(())
+}
+
+async fn seed_free_staff(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, nations: &std::collections::HashMap<String,i64>, rng: &mut impl Rng) -> Result<(), String> {
+    let names: Vec<(&String,&i64)> = nations.iter().collect();
+    let roles = ["coach","assistant","scout","physio","fitness_coach","goalkeeper_coach","technical_coach","analyst"];
+    for idx in 0..16 {
+        let (nation,&nation_id)=names[idx % names.len()]; let first=data::pick_first(nation,rng); let last=data::pick_last(nation,rng); let base=(8+rng.gen_range(0..9)).clamp(1,20);
+        sqlx::query("INSERT INTO staff(first_name,last_name,common_name,nation_id,role,club_id,tactical,man_management,judging,motivating,working_youngsters,physio_level,wage_weekly) VALUES(?,?,?,?,?,NULL,?,?,?,?,?,?,?)").bind(first).bind(&last).bind(format!("{} {}",first,last)).bind(nation_id).bind(roles[idx%roles.len()]).bind(base).bind(base).bind(base).bind(base).bind(base).bind(base).bind(400.0+base as f64*80.0).execute(&mut **tx).await.map_err(|e|e.to_string())?;
+    }
+    Ok(())
+}
+
+async fn seed_staff_for_club(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, club_id: i64, nation_id: i64, nation: &str, reputation: i64, rng: &mut impl Rng) -> Result<(), String> {
+    let roles = ["coach", "assistant", "scout", "physio"];
+    for (idx, role) in roles.iter().enumerate() {
+        let first = data::pick_first(nation, rng);
+        let last = data::pick_last(nation, rng);
+        let base = (reputation / 70 + rng.gen_range(-2..=3)).clamp(5, 20);
+        let tactical = (base + if *role == "coach" { 4 } else { 0 }).clamp(1, 20);
+        let management = (base + rng.gen_range(-2..=2)).clamp(1, 20);
+        let judging = (base + if *role == "scout" { 5 } else { 0 }).clamp(1, 20);
+        let motivating = (base + if *role == "assistant" { 4 } else { 0 }).clamp(1, 20);
+        let youngsters = (base + if idx == 0 { 2 } else { 0 }).clamp(1, 20);
+        let physio = (base + if *role == "physio" { 6 } else { 0 }).clamp(1, 20);
+        let wage = (reputation as f64 * (if *role == "coach" { 1.4 } else { 0.9 }) + rng.gen_range(100.0..500.0)).round();
+        sqlx::query("INSERT INTO staff(first_name,last_name,common_name,nation_id,role,club_id,tactical,man_management,judging,motivating,working_youngsters,physio_level,wage_weekly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+            .bind(first).bind(&last).bind(format!("{} {}", first, last)).bind(nation_id).bind(role).bind(club_id).bind(tactical).bind(management).bind(judging).bind(motivating).bind(youngsters).bind(physio).bind(wage)
+            .execute(&mut **tx).await.map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -294,7 +353,7 @@ mod tests {
         let (comps,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM competitions").fetch_one(&pool).await.unwrap();
         let (stadiums,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM stadiums").fetch_one(&pool).await.unwrap();
         assert!(clubs >= 46, "al menos 46 clubes, got {}", clubs);
-        assert_eq!(players, clubs * 12, "12 jugadores por club");
+        assert_eq!(players, clubs * 12 + 24, "12 jugadores por club más 24 agentes libres");
         assert_eq!(comps, 43, "43 competiciones del PRD (ligas, copas, 2ª división y selecciones)");
         assert_eq!(stadiums, clubs);
         let (standings,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM league_standings").fetch_one(&pool).await.unwrap();
@@ -302,7 +361,9 @@ mod tests {
         let (fin,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM club_finances").fetch_one(&pool).await.unwrap();
         assert_eq!(fin, clubs);
         let (contracts,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM contracts").fetch_one(&pool).await.unwrap();
-        assert_eq!(contracts, players);
+        assert_eq!(contracts, clubs * 12, "solo los jugadores de club empiezan contratados");
+        let (staff,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM staff").fetch_one(&pool).await.unwrap();
+        assert_eq!(staff, clubs * 4 + 16, "cada club recibe cuatro perfiles y hay staff libre");
         let (matches,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches").fetch_one(&pool).await.unwrap();
         assert!(matches >= 662, "al menos 662 partidos, got {}", matches);
         let (d0,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(&pool).await.unwrap();

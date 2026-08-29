@@ -1,7 +1,7 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::commands::AppState;
+use crate::commands::{AppState, LiveMatchInfo};
 use crate::engine::{EngineTactics, MatchEngine, MatchSnapshot, PlayerAttrs, Role};
 
 #[derive(Serialize)]
@@ -30,6 +30,68 @@ pub struct PreMatchPlayer {
     pub name: String,
     pub position: String,
     pub ca: i64,
+}
+
+#[derive(Serialize)]
+pub struct MatchSummaryTeam {
+    pub id: i64,
+    pub name: String,
+    pub short_name: String,
+    pub score: i64,
+    pub shots: i64,
+    pub shots_on_target: i64,
+    pub fouls: i64,
+    pub possession: i64,
+}
+
+#[derive(Serialize)]
+pub struct MatchSummaryEvent {
+    pub minute: i64,
+    pub second: i64,
+    pub kind: String,
+    pub team_id: i64,
+    pub player_id: Option<i64>,
+    pub player_name: Option<String>,
+    pub description: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct MatchSummaryRaw {
+    match_id: i64,
+    date: String,
+    round: i64,
+    competition: String,
+    home_id: i64,
+    home_name: String,
+    home_short: String,
+    home_score: i64,
+    home_shots: i64,
+    home_sot: i64,
+    home_fouls: i64,
+    home_pos: i64,
+    away_id: i64,
+    away_name: String,
+    away_short: String,
+    away_score: i64,
+    away_shots: i64,
+    away_sot: i64,
+    away_fouls: i64,
+    away_pos: i64,
+}
+
+#[derive(Serialize)]
+pub struct MatchSummary {
+    pub match_id: i64,
+    pub date: String,
+    pub round: i64,
+    pub competition: String,
+    pub went_to_extra_time: bool,
+    pub went_to_penalties: bool,
+    pub penalty_home_score: i64,
+    pub penalty_away_score: i64,
+    pub home: MatchSummaryTeam,
+    pub away: MatchSummaryTeam,
+    pub events: Vec<MatchSummaryEvent>,
 }
 
 async fn match_info(pool: &sqlx::SqlitePool, match_id: i64) -> Result<(i64, i64, String, String, String, String), String> {
@@ -68,6 +130,24 @@ fn role_for_index(idx: usize) -> Role {
 
 fn formation_code(f: &str) -> u8 {
     match f { "4-0" => 1, "2-2" => 2, "5-0" => 3, _ => 0 }
+}
+
+#[tauri::command]
+pub async fn get_last_match_summary(state: State<'_, AppState>, club_id: i64) -> Result<Option<MatchSummary>, String> {
+    let pool = {
+        let guard = state.pool.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No hay partida activa")?
+    };
+    let row = sqlx::query_as::<_, MatchSummaryRaw>(
+        "SELECT m.id AS match_id, m.date, m.round, comp.name AS competition, m.home_club_id AS home_id, hc.name AS home_name, hc.short_name AS home_short, m.home_score, m.home_shots, m.home_shots_on_target AS home_sot, m.home_fouls, COALESCE(m.home_possession,0) AS home_pos, m.away_club_id AS away_id, ac.name AS away_name, ac.short_name AS away_short, m.away_score, m.away_shots, m.away_shots_on_target AS away_sot, m.away_fouls, COALESCE(m.away_possession,0) AS away_pos FROM matches m JOIN competitions comp ON comp.id=m.competition_id JOIN clubs hc ON hc.id=m.home_club_id JOIN clubs ac ON ac.id=m.away_club_id WHERE m.status='finished' AND (m.home_club_id=? OR m.away_club_id=?) ORDER BY m.date DESC, m.id DESC LIMIT 1"
+    ).bind(club_id).bind(club_id).fetch_optional(&pool).await.map_err(|e| e.to_string())?;
+    let Some(raw) = row else { return Ok(None); };
+    let MatchSummaryRaw { match_id:id, date, round, competition, home_id, home_name, home_short, home_score, home_shots, home_sot, home_fouls, home_pos, away_id, away_name, away_short, away_score, away_shots, away_sot, away_fouls, away_pos } = raw;
+    let (extra, penalties, ph, pa): (i64, i64, i64, i64) = sqlx::query_as("SELECT COALESCE(went_to_extra_time,0), COALESCE(went_to_penalties,0), COALESCE(penalty_home_score,0), COALESCE(penalty_away_score,0) FROM cup_ties WHERE match_id=?").bind(id).fetch_optional(&pool).await.map_err(|e| e.to_string())?.unwrap_or((0,0,0,0));
+    let events = sqlx::query_as::<_, (i64, i64, String, i64, Option<i64>, Option<String>, String)>(
+        "SELECT e.minute, e.second, e.event_type, e.club_id, e.player_id, CASE WHEN e.player_id IS NULL THEN NULL ELSE p.common_name END, COALESCE(e.description,'') FROM match_events e LEFT JOIN players p ON p.id=e.player_id WHERE e.match_id=? ORDER BY e.minute, e.second, e.id"
+    ).bind(id).fetch_all(&pool).await.map_err(|e| e.to_string())?.into_iter().map(|(minute, second, kind, team_id, player_id, player_name, description)| MatchSummaryEvent { minute, second, kind, team_id, player_id, player_name, description }).collect();
+    Ok(Some(MatchSummary { match_id:id, date, round, competition, went_to_extra_time: extra != 0, went_to_penalties: penalties != 0, penalty_home_score: ph, penalty_away_score: pa, home: MatchSummaryTeam { id:home_id, name:home_name, short_name:home_short, score:home_score, shots:home_shots, shots_on_target:home_sot, fouls:home_fouls, possession:home_pos }, away: MatchSummaryTeam { id:away_id, name:away_name, short_name:away_short, score:away_score, shots:away_shots, shots_on_target:away_sot, fouls:away_fouls, possession:away_pos }, events }))
 }
 
 #[tauri::command]
@@ -158,6 +238,8 @@ pub async fn start_live_match_tactics(
     {
         let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
         *guard = Some(eng);
+        let mut info = state.live_match_info.lock().map_err(|e| e.to_string())?;
+        *info = Some(LiveMatchInfo { match_id, home_club_id: home, away_club_id: away });
     }
     Ok(snap)
 }
@@ -181,20 +263,85 @@ pub async fn start_live_match(state: State<'_, AppState>, match_id: i64) -> Resu
     {
         let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
         *guard = Some(eng);
+        let mut info = state.live_match_info.lock().map_err(|e| e.to_string())?;
+        *info = Some(LiveMatchInfo { match_id, home_club_id: home, away_club_id: away });
     }
     Ok(snap)
 }
 
 #[tauri::command]
-pub async fn tick_live(state: State<'_, AppState>, ticks: Option<u32>) -> Result<MatchSnapshot, String> {
-    let n = ticks.unwrap_or(1) as usize;
+async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, snapshot: &MatchSnapshot) -> Result<(), String> {
+    let (status,): (String,) = sqlx::query_as("SELECT status FROM matches WHERE id=?").bind(info.match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if status == "finished" { return Ok(()); }
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE matches SET status='finished', home_score=?, away_score=?, home_shots=?, away_shots=?, home_fouls=?, away_fouls=?, home_possession=?, away_possession=? WHERE id=?")
+        .bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64)
+        .bind(snapshot.shots[0] as i64).bind(snapshot.shots[1] as i64)
+        .bind(snapshot.fouls[0] as i64).bind(snapshot.fouls[1] as i64)
+        .bind(snapshot.possession[0] as i64).bind(snapshot.possession[1] as i64)
+        .bind(info.match_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    for event in &snapshot.events {
+        sqlx::query("INSERT INTO match_events (match_id, minute, second, event_type, player_id, club_id, description, x, y) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(info.match_id).bind(event.minute as i64).bind(event.second as i64).bind(&event.kind)
+            .bind(event.player_id.map(|id| id as i64)).bind(if event.team_id == 0 { info.home_club_id } else { info.away_club_id })
+            .bind(&event.description).bind(event.x).bind(event.y).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    }
+    sqlx::query("UPDATE league_standings SET played=played+1, won=won+CASE WHEN club_id=? AND ? > ? OR club_id=? AND ? > ? THEN 1 ELSE 0 END, drawn=drawn+CASE WHEN ? = ? THEN 1 ELSE 0 END, lost=lost+CASE WHEN club_id=? AND ? < ? OR club_id=? AND ? < ? THEN 1 ELSE 0 END, goals_for=goals_for+CASE WHEN club_id=? THEN ? ELSE ? END, goals_against=goals_against+CASE WHEN club_id=? THEN ? ELSE ? END, goal_difference=goal_difference+CASE WHEN club_id=? THEN ?-? ELSE ?-? END, points=points+CASE WHEN club_id=? AND ? > ? THEN 3 WHEN club_id=? AND ? = ? THEN 1 WHEN club_id=? AND ? > ? THEN 3 ELSE 0 END WHERE competition_id=(SELECT competition_id FROM matches WHERE id=?) AND club_id IN (?, ?)")
+        .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
+        .bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64)
+        .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
+        .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
+        .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
+        .bind(info.match_id).bind(info.home_club_id).bind(info.away_club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn live_tactics(state: State<'_, AppState>, formation: u8, tempo: f32, pressing: f32, defensive_line: f32, width: f32) -> Result<MatchSnapshot, String> {
     let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
     let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
-    for _ in 0..n {
-        eng.tick();
-        if eng.state == crate::engine::MatchState::Finished { break; }
-    }
+    eng.update_live_tactics(0, EngineTactics { formation, tempo:tempo.clamp(0.0,100.0), pressing:pressing.clamp(0.0,100.0), defensive_line:defensive_line.clamp(0.0,100.0), width:width.clamp(0.0,100.0) })?;
     Ok(eng.snapshot())
+}
+
+#[tauri::command]
+pub async fn live_substitute(state: State<'_, AppState>, team: usize, out_id: u32, in_id: u32) -> Result<MatchSnapshot, String> {
+    let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
+    let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
+    eng.manual_substitution(team, out_id, in_id)?;
+    Ok(eng.snapshot())
+}
+
+#[tauri::command]
+pub async fn live_timeout(state: State<'_, AppState>, team: usize) -> Result<MatchSnapshot, String> {
+    let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
+    let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
+    eng.call_timeout(team)?;
+    Ok(eng.snapshot())
+}
+
+#[tauri::command]
+pub async fn tick_live(state: State<'_, AppState>, ticks: Option<u32>) -> Result<MatchSnapshot, String> {
+    let pool = {
+        let guard = state.pool.lock().map_err(|e| e.to_string())?;
+        guard.clone().ok_or("No hay partida activa")?
+    };
+    let n = ticks.unwrap_or(1) as usize;
+    let (snapshot, finished) = {
+        let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
+        let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
+        for _ in 0..n {
+            eng.tick();
+            if eng.state == crate::engine::MatchState::Finished { break; }
+        }
+        (eng.snapshot(), eng.state == crate::engine::MatchState::Finished)
+    };
+    if finished {
+        let info = state.live_match_info.lock().map_err(|e| e.to_string())?.clone().ok_or("Falta información del partido")?;
+        persist_finished_match(&pool, &info, &snapshot).await?;
+    }
+    Ok(snapshot)
 }
 
 #[tauri::command]

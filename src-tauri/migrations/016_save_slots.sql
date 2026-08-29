@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS save_slots (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  is_autosave INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_save_slots_path ON save_slots(file_path);

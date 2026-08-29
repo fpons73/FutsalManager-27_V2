@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type TrainingRow, type ProgressRow } from "../../api";
+import { api, type TrainingRow, type ProgressRow, type StaffImpact, type TacticalAutomation } from "../../api";
 
 const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
 
@@ -9,12 +9,17 @@ export default function TrainingView() {
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string|null>(null);
+  const [staff, setStaff] = useState<StaffImpact|null>(null);
+  const [automations, setAutomations] = useState<TacticalAutomation[]>([]);
+  const [autoName, setAutoName] = useState("Reacción final");
 
   const load = async () => {
-    const [s, t, p] = await Promise.all([api.getTrainingSchedule(), api.getTrainingTypes(), api.getTrainingProgress()]);
+    const [s, t, p, impact, autos] = await Promise.all([api.getTrainingSchedule(), api.getTrainingTypes(), api.getTrainingProgress(), api.getStaffImpact(), api.getTacticalAutomations()]);
     setSchedule(s);
     setTypes(t);
     setProgress(p);
+    setStaff(impact);
+    setAutomations(autos);
   };
   useEffect(()=>{ load(); },[]);
 
@@ -45,8 +50,9 @@ export default function TrainingView() {
         <button onClick={save} disabled={saving} className="rounded-lg bg-fm-accent px-4 py-2 text-sm font-bold text-black disabled:opacity-50">{saving?"Guardando…":"Guardar"}</button>
       </div>
       {msg && <div className="rounded-lg bg-fm-accent/10 px-3 py-2 text-sm">{msg}</div>}
+      {staff && <div className="grid gap-2 rounded-xl border border-fm-border bg-fm-panel p-3 text-xs sm:grid-cols-4"><div><span className="text-fm-dim">Staff técnico</span><br/><b>{staff.coach}/20</b> · +{staff.training_bonus}% entrenamiento</div><div><span className="text-fm-dim">Asistente</span><br/><b>{staff.assistant}/20</b> gestión</div><div><span className="text-fm-dim">Preparadores jóvenes</span><br/><b>{staff.youth}/20</b> · desarrollo cantera</div><div><span className="text-fm-dim">Fisioterapia</span><br/><b>{staff.physio}/20</b> · -{staff.injury_reduction}% riesgo</div></div>}
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="rounded-xl border border-fm-border bg-fm-panel p-4"><div className="mb-2 flex items-center justify-between"><div><h3 className="font-black">Automatismos tácticos</h3><p className="text-xs text-fm-dim">Se entrenan semanalmente y se activan en situaciones de partido.</p></div><input value={autoName} onChange={e=>setAutoName(e.target.value)} className="w-36 rounded border border-fm-border bg-fm-bg px-2 py-1 text-xs" aria-label="Nombre del automatismo" /></div><div className="flex flex-wrap gap-2"><button onClick={async()=>{await api.setTacticalAutomation({name:autoName,triggerType:"losing_late",threshold:70,formation:"5-0",tempo:75,pressing:70,defensiveLine:65,width:60,enabled:true}); await load(); setMsg("Automatismo guardado");}} className="rounded-lg bg-fm-accent px-3 py-1.5 text-xs font-bold text-black">Guardar reacción</button>{automations.map(a=><span key={a.id} className="rounded-full border border-fm-border px-2 py-1 text-xs">{a.name} · {a.formation} · nivel {a.training_level}</span>)}</div></div>\n\n      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {[0,1,2,3,4,5,6].map((d)=>{
           const cur = schedule.find((s)=>s.day===d);
           const isMatch = d===5;

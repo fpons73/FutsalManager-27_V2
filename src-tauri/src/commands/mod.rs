@@ -1,10 +1,14 @@
+pub mod contract_cmd;
 pub mod editor_cmd;
 pub mod finance_cmd;
 pub mod game;
 pub mod inbox_cmd;
 pub mod match_live;
 pub mod season_cmd;
+pub mod scouting_cmd;
+pub mod save_cmd;
 pub mod training_cmd;
+pub mod youth_cmd;
 pub mod transfer_cmd;
 
 use std::sync::Mutex;
@@ -12,13 +16,21 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use crate::engine::MatchEngine;
 
+#[derive(Clone, serde::Serialize)]
+pub struct LiveMatchInfo {
+  pub match_id: i64,
+  pub home_club_id: i64,
+  pub away_club_id: i64,
+}
+
 pub struct AppState {
   pub pool: Mutex<Option<SqlitePool>>,
   pub live_match: Mutex<Option<MatchEngine>>,
+  pub live_match_info: Mutex<Option<LiveMatchInfo>>,
 }
 
 impl Default for AppState {
-  fn default() -> Self { Self { pool: Mutex::new(None), live_match: Mutex::new(None) } }
+  fn default() -> Self { Self { pool: Mutex::new(None), live_match: Mutex::new(None), live_match_info: Mutex::new(None) } }
 }
 
 #[derive(Serialize)]

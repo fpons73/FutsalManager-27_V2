@@ -8,11 +8,17 @@ pub struct ConfederationRow { pub id: i64, pub name: String, pub short_name: Str
 #[derive(Serialize, Deserialize)]
 pub struct ClubRow { pub id: i64, pub name: String, pub short_name: String, pub nation: String, pub nation_id: i64, pub city: String, pub city_id: Option<i64>, pub stadium: String, pub capacity: i64, pub reputation: i64, pub primary_color: String, pub secondary_color: String, pub crest_path: Option<String>, pub coach_id: Option<i64>, pub coach_name: Option<String>, pub staff_count: i64, pub squad_count: i64 }
 #[derive(Serialize, Deserialize)]
-pub struct PlayerRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub club: String, pub club_id: Option<i64>, pub position: String, pub ca: i64, pub pa: i64, pub age: i64, pub foot: String, pub photo_path: Option<String> }
+pub struct PlayerRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub second_nation_id: Option<i64>, pub club: String, pub club_id: Option<i64>, pub position: String, pub secondary_position: Option<String>, pub ca: i64, pub pa: i64, pub age: i64, pub foot: String, pub photo_path: Option<String>, pub flag_path: Option<String>, pub second_flag_path: Option<String> }
+#[derive(Serialize, Deserialize, Clone)]
+pub struct StadiumRow { pub id:i64, pub name:String, pub city:String, pub city_id:Option<i64>, pub capacity:i64, pub pitch_type:String, pub photo_path:Option<String>, pub club_id:Option<i64>, pub club_name:Option<String> }
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ContractEditorRow { pub id:i64, pub player_id:i64, pub player_name:String, pub club_id:i64, pub club_name:String, pub wage_weekly:f64, pub start_date:String, pub end_date:String, pub release_clause:Option<f64>, pub role:String, pub signing_bonus:f64, pub appearance_bonus:f64, pub clean_sheet_bonus:f64, pub loan_parent_id:Option<i64>, pub loan_until:Option<String>, pub is_active:i64 }
+
 #[derive(Serialize, Deserialize)]
 pub struct CompetitionRow { pub id: i64, pub name: String, pub nation: Option<String>, pub nation_id: Option<i64>, pub tier: Option<i64>, pub total_teams: Option<i64>, pub season: String, pub format: String, pub kind: String }
 #[derive(Serialize, Deserialize, Clone)]
-pub struct StaffRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub role: String, pub club_id: Option<i64>, pub club_name: Option<String>, pub tactical: i64, pub man_management: i64, pub judging: i64, pub motivating: i64, pub working_youngsters: i64, pub physio_level: i64, pub wage_weekly: f64, pub photo_path: Option<String> }
+pub struct StaffRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub flag_path: Option<String>, pub role: String, pub club_id: Option<i64>, pub club_name: Option<String>, pub tactical: i64, pub man_management: i64, pub judging: i64, pub motivating: i64, pub working_youngsters: i64, pub physio_level: i64, pub wage_weekly: f64, pub photo_path: Option<String> }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -67,19 +73,19 @@ pub async fn list_clubs(pool: &SqlitePool) -> Result<Vec<ClubRow>, String> {
 }
 pub async fn list_players(pool: &SqlitePool, limit: i64) -> Result<Vec<PlayerRow>, String> {
     let lim = limit.clamp(20, 2000);
-    let rows = sqlx::query_as::<_, (i64, String, String, String, String, i64, Option<String>, Option<i64>, Option<String>, i64, i64, String, Option<String>)>(
-        "SELECT p.id, p.first_name, p.last_name, p.common_name, n.name, p.nation_id, cl.name, c.club_id, COALESCE(pp.pos,'UNI'), ps.current_ability, ps.potential_ability, p.preferred_foot, p.photo_path FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id LEFT JOIN contracts c ON c.player_id=p.id AND c.is_active=1 LEFT JOIN clubs cl ON cl.id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id ORDER BY ps.current_ability DESC LIMIT ?"
+    let rows = sqlx::query_as::<_, (i64, String, String, String, String, i64, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<String>, i64, i64, String, Option<String>, Option<String>)>(
+        "SELECT p.id, p.first_name, p.last_name, p.common_name, n.name, p.nation_id, p.second_nation_id, cl.name, c.club_id, COALESCE(pp.pos,'UNI'), p.secondary_position, ps.current_ability, ps.potential_ability, p.preferred_foot, p.photo_path, n.flag_path, n2.flag_path FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id LEFT JOIN contracts c ON c.player_id=p.id AND c.is_active=1 LEFT JOIN clubs cl ON cl.id=c.club_id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id ORDER BY ps.current_ability DESC LIMIT ?"
     ).bind(lim).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|(id, first_name, last_name, common_name, nation, nation_id, club, club_id, position, ca, pa, foot, photo_path)| {
-        PlayerRow { id, first_name, last_name, common_name, nation, nation_id, club: club.unwrap_or_default(), club_id, position: position.unwrap_or_else(|| "UNI".into()), ca, pa, age: 0, foot, photo_path }
+    Ok(rows.into_iter().map(|(id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club, club_id, position, secondary_position, ca, pa, foot, photo_path, flag_path)| {
+        PlayerRow { id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club: club.unwrap_or_default(), club_id, position: position.unwrap_or_else(|| "UNI".into()), secondary_position, ca, pa, age: 0, foot, photo_path, flag_path, second_flag_path: None }
     }).collect())
 }
 pub async fn list_players_by_club(pool: &SqlitePool, club_id: i64) -> Result<Vec<PlayerRow>, String> {
-    let rows = sqlx::query_as::<_, (i64, String, String, String, String, i64, Option<String>, Option<i64>, Option<String>, i64, i64, String, Option<String>)>(
-        "SELECT p.id, p.first_name, p.last_name, p.common_name, n.name, p.nation_id, cl.name, c.club_id, COALESCE(pp.pos,'UNI'), ps.current_ability, ps.potential_ability, p.preferred_foot, p.photo_path FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN contracts c ON c.player_id=p.id AND c.club_id=? AND c.is_active=1 LEFT JOIN clubs cl ON cl.id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id ORDER BY ps.current_ability DESC"
+    let rows = sqlx::query_as::<_, (i64, String, String, String, String, i64, Option<i64>, Option<String>, Option<i64>, Option<String>, Option<String>, i64, i64, String, Option<String>, Option<String>)>(
+        "SELECT p.id, p.first_name, p.last_name, p.common_name, n.name, p.nation_id, p.second_nation_id, cl.name, c.club_id, COALESCE(pp.pos,'UNI'), p.secondary_position, ps.current_ability, ps.potential_ability, p.preferred_foot, p.photo_path, n.flag_path, n2.flag_path FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN contracts c ON c.player_id=p.id AND c.club_id=? AND c.is_active=1 LEFT JOIN clubs cl ON cl.id=c.club_id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id ORDER BY ps.current_ability DESC"
     ).bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|(id, first_name, last_name, common_name, nation, nation_id, club, club_id, position, ca, pa, foot, photo_path)| {
-        PlayerRow { id, first_name, last_name, common_name, nation, nation_id, club: club.unwrap_or_default(), club_id, position: position.unwrap_or_else(|| "UNI".into()), ca, pa, age: 0, foot, photo_path }
+    Ok(rows.into_iter().map(|(id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club, club_id, position, secondary_position, ca, pa, foot, photo_path, flag_path)| {
+        PlayerRow { id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club: club.unwrap_or_default(), club_id, position: position.unwrap_or_else(|| "UNI".into()), secondary_position, ca, pa, age: 0, foot, photo_path, flag_path, second_flag_path: None }
     }).collect())
 }
 pub async fn assign_player(pool: &SqlitePool, player_id: i64, club_id: i64) -> Result<(), String> {
@@ -96,13 +102,32 @@ pub async fn release_player(pool: &SqlitePool, player_id: i64) -> Result<(), Str
     sqlx::query("UPDATE contracts SET is_active=0 WHERE player_id=? AND is_active=1").bind(player_id).execute(pool).await.map_err(|e| e.to_string())?;
     Ok(())
 }
+pub async fn list_contracts(pool: &SqlitePool) -> Result<Vec<ContractEditorRow>, String> {
+    let rows = sqlx::query_as::<_,(i64,i64,String,i64,String,f64,String,String,Option<f64>,String,f64,f64,f64,Option<i64>,Option<String>,i64)>("SELECT c.id,c.player_id,p.common_name,c.club_id,cl.name,c.wage_weekly,c.start_date,c.end_date,c.release_clause,c.contract_role,c.signing_bonus,c.appearance_bonus,c.clean_sheet_bonus,c.loan_parent_id,c.loan_until,c.is_active FROM contracts c JOIN players p ON p.id=c.player_id JOIN clubs cl ON cl.id=c.club_id ORDER BY c.is_active DESC,c.end_date") .fetch_all(pool).await.map_err(|e|e.to_string())?;
+    Ok(rows.into_iter().map(|(id,player_id,player_name,club_id,club_name,wage_weekly,start_date,end_date,release_clause,role,signing_bonus,appearance_bonus,clean_sheet_bonus,loan_parent_id,loan_until,is_active)| ContractEditorRow { id,player_id,player_name,club_id,club_name,wage_weekly,start_date,end_date,release_clause,role,signing_bonus,appearance_bonus,clean_sheet_bonus,loan_parent_id,loan_until,is_active }).collect())
+}
+pub async fn get_finance(pool:&SqlitePool, club_id:i64)->Result<crate::finance::FinanceRow,String>{crate::finance::get_finance(pool,club_id).await}
+pub async fn update_finance(pool:&SqlitePool, club_id:i64, balance:f64, transfer_budget:f64, wage_budget:f64, sponsorship:f64, ticket_income:f64, prize_money:f64)->Result<(),String>{if [balance,transfer_budget,wage_budget,sponsorship,ticket_income,prize_money].iter().any(|v|!v.is_finite()||*v<0.0){return Err("Valores económicos no válidos".into())}sqlx::query("UPDATE club_finances SET balance=?,transfer_budget=?,wage_budget=?,sponsorship_income=?,ticket_income=?,prize_money=? WHERE club_id=?").bind(balance).bind(transfer_budget).bind(wage_budget).bind(sponsorship).bind(ticket_income).bind(prize_money).bind(club_id).execute(pool).await.map_err(|e|e.to_string())?;Ok(())}
+pub async fn update_contract(pool: &SqlitePool, id:i64, club_id:i64, wage:f64, start_date:String, end_date:String, release_clause:Option<f64>, role:String, signing_bonus:f64, appearance_bonus:f64, clean_sheet_bonus:f64, is_active:i64) -> Result<(),String> {
+    if wage < 0.0 || signing_bonus < 0.0 || appearance_bonus < 0.0 || clean_sheet_bonus < 0.0 || end_date < start_date { return Err("Datos de contrato no válidos".into()); }
+    sqlx::query("UPDATE contracts SET club_id=?,wage_weekly=?,start_date=?,end_date=?,release_clause=?,contract_role=?,signing_bonus=?,appearance_bonus=?,clean_sheet_bonus=?,is_active=? WHERE id=?").bind(club_id).bind(wage).bind(start_date).bind(end_date).bind(release_clause).bind(role).bind(signing_bonus).bind(appearance_bonus).bind(clean_sheet_bonus).bind(is_active).bind(id).execute(pool).await.map_err(|e|e.to_string())?;
+    Ok(())
+}
 pub async fn list_competitions(pool: &SqlitePool) -> Result<Vec<CompetitionRow>, String> {
     let rows = sqlx::query_as::<_, (i64, String, Option<i64>, Option<String>, Option<i64>, Option<i64>, String, String, String)>(
         "SELECT comp.id, comp.name, comp.nation_id, n.name, comp.tier, comp.total_teams, comp.season, comp.format, comp.kind FROM competitions comp LEFT JOIN nations n ON n.id=comp.nation_id ORDER BY comp.kind, comp.tier NULLS LAST, comp.name"
     ).fetch_all(pool).await.map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(|(id, name, nation_id, nation, tier, total_teams, season, format, kind)| CompetitionRow { id, name, nation, nation_id, tier, total_teams, season, format, kind }).collect())
 }
-pub async fn list_stadiums(pool: &SqlitePool) -> Result<Vec<(i64, String, String, i64)>, String> {
+pub async fn list_stadiums(pool: &SqlitePool) -> Result<Vec<StadiumRow>, String> {
+    let rows=sqlx::query_as::<_,(i64,String,String,Option<i64>,i64,String,Option<String>,Option<i64>,Option<String>)>("SELECT s.id,s.name,COALESCE(ci.name,'-'),s.city_id,s.capacity,s.pitch_type,s.photo_path,c.id,c.name FROM stadiums s LEFT JOIN cities ci ON ci.id=s.city_id LEFT JOIN clubs c ON c.stadium_id=s.id ORDER BY s.name").fetch_all(pool).await.map_err(|e|e.to_string())?;
+    Ok(rows.into_iter().map(|(id,name,city,city_id,capacity,pitch_type,photo_path,club_id,club_name)| StadiumRow{id,name,city,city_id,capacity,pitch_type,photo_path,club_id,club_name}).collect())
+}
+pub async fn create_stadium(pool:&SqlitePool,name:String,city_id:Option<i64>,capacity:i64,pitch_type:String)->Result<i64,String>{ if name.trim().is_empty()||capacity<1{return Err("Pabellón no válido".into())} let (id,):(i64,)=sqlx::query_as("INSERT INTO stadiums(name,city_id,capacity,pitch_type) VALUES(?,?,?,?) RETURNING id").bind(name).bind(city_id).bind(capacity).bind(pitch_type).fetch_one(pool).await.map_err(|e|e.to_string())?;Ok(id) }
+pub async fn update_stadium(pool:&SqlitePool,id:i64,name:String,city_id:Option<i64>,capacity:i64,pitch_type:String)->Result<(),String>{if name.trim().is_empty()||capacity<1{return Err("Pabellón no válido".into())}sqlx::query("UPDATE stadiums SET name=?,city_id=?,capacity=?,pitch_type=? WHERE id=?").bind(name).bind(city_id).bind(capacity).bind(pitch_type).bind(id).execute(pool).await.map_err(|e|e.to_string())?;Ok(())}
+pub async fn delete_stadium(pool:&SqlitePool,id:i64)->Result<(),String>{let (n,):(i64,)=sqlx::query_as("SELECT COUNT(*) FROM clubs WHERE stadium_id=?").bind(id).fetch_one(pool).await.map_err(|e|e.to_string())?;if n>0{return Err("No se puede borrar un pabellón asignado a un club".into())}sqlx::query("DELETE FROM stadiums WHERE id=?").bind(id).execute(pool).await.map_err(|e|e.to_string())?;Ok(())}
+
+pub async fn list_stadiums_legacy(pool: &SqlitePool) -> Result<Vec<(i64, String, String, i64)>, String> {
     let rows: Vec<(i64, String, String, i64)> = sqlx::query_as("SELECT s.id, s.name, COALESCE(ci.name,'-'), s.capacity FROM stadiums s LEFT JOIN cities ci ON ci.id=s.city_id ORDER BY s.capacity DESC").fetch_all(pool).await.map_err(|e| e.to_string())?;
     Ok(rows)
 }
@@ -183,8 +208,8 @@ pub async fn update_club(pool: &SqlitePool, id: i64, name: String, short: String
         .execute(pool).await.map_err(|e| e.to_string())?;
     Ok(())
 }
-pub async fn update_player(pool: &SqlitePool, id: i64, first: String, last: String, nation_id: i64, club_id: Option<i64>, ca: i64, pa: i64, pos: String) -> Result<(), String> {
-    sqlx::query("UPDATE players SET first_name=?, last_name=?, common_name=?, nation_id=? WHERE id=?").bind(&first).bind(&last).bind(format!("{} {}", first, last)).bind(nation_id).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
+pub async fn update_player(pool: &SqlitePool, id: i64, first: String, last: String, nation_id: i64, second_nation_id: Option<i64>, secondary_position: Option<String>, club_id: Option<i64>, ca: i64, pa: i64, pos: String) -> Result<(), String> {
+    sqlx::query("UPDATE players SET first_name=?, last_name=?, common_name=?, nation_id=?, second_nation_id=?, secondary_position=? WHERE id=?").bind(&first).bind(&last).bind(format!("{} {}", first, last)).bind(nation_id).bind(second_nation_id).bind(secondary_position).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
     sqlx::query("UPDATE player_states SET current_ability=?, potential_ability=? WHERE player_id=?").bind(ca).bind(pa).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
     let (por,cie,ala,piv,uni) = match pos.as_str() { "POR"=>(20,2,1,1,3), "CIE"=>(1,20,12,8,10), "ALA"=>(1,10,20,10,14), "PIV"=>(1,6,10,20,12), _=>(3,10,14,14,20) };
     sqlx::query("UPDATE player_positions SET por_natural=?, cie_natural=?, ala_natural=?, piv_natural=?, uni_natural=? WHERE player_id=?").bind(por).bind(cie).bind(ala).bind(piv).bind(uni).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
@@ -252,22 +277,25 @@ pub async fn delete_competition(pool: &SqlitePool, id: i64) -> Result<(), String
 pub async fn list_staff(pool: &SqlitePool, club_id: Option<i64>) -> Result<Vec<StaffRow>, String> {
     #[derive(sqlx::FromRow)]
     #[allow(dead_code)]
-    struct Sr { id: i64, first_name: String, last_name: String, common_name: String, nation: String, nation_id: i64, role: String, club_id: Option<i64>, club_name: Option<String>, tactical: i64, man_management: i64, judging: i64, motivating: i64, working_youngsters: i64, physio_level: i64, wage_weekly: f64, photo_path: Option<String> }
+    struct Sr { id: i64, first_name: String, last_name: String, common_name: String, nation: String, nation_id: i64, flag_path: Option<String>, role: String, club_id: Option<i64>, club_name: Option<String>, tactical: i64, man_management: i64, judging: i64, motivating: i64, working_youngsters: i64, physio_level: i64, wage_weekly: f64, photo_path: Option<String> }
     let rows = sqlx::query_as::<_, Sr>(
-        "SELECT st.id, st.first_name, st.last_name, COALESCE(st.common_name, st.first_name || ' ' || st.last_name) AS common_name, n.name AS nation, st.nation_id, st.role, st.club_id, cl.name AS club_name, st.tactical, st.man_management, st.judging, st.motivating, st.working_youngsters, st.physio_level, st.wage_weekly, st.photo_path FROM staff st JOIN nations n ON n.id=st.nation_id LEFT JOIN clubs cl ON cl.id=st.club_id WHERE (? IS NULL OR st.club_id=?) ORDER BY st.role, st.last_name"
+        "SELECT st.id, st.first_name, st.last_name, COALESCE(st.common_name, st.first_name || ' ' || st.last_name) AS common_name, n.name AS nation, st.nation_id, n.flag_path, st.role, st.club_id, cl.name AS club_name, st.tactical, st.man_management, st.judging, st.motivating, st.working_youngsters, st.physio_level, st.wage_weekly, st.photo_path FROM staff st JOIN nations n ON n.id=st.nation_id LEFT JOIN clubs cl ON cl.id=st.club_id WHERE (? IS NULL OR st.club_id=?) ORDER BY st.role, st.last_name"
     ).bind(club_id).bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| StaffRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, nation: r.nation, nation_id: r.nation_id, role: r.role, club_id: r.club_id, club_name: r.club_name, tactical: r.tactical, man_management: r.man_management, judging: r.judging, motivating: r.motivating, working_youngsters: r.working_youngsters, physio_level: r.physio_level, wage_weekly: r.wage_weekly, photo_path: r.photo_path }).collect())
+    Ok(rows.into_iter().map(|r| StaffRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, nation: r.nation, nation_id: r.nation_id, flag_path: r.flag_path, role: r.role, club_id: r.club_id, club_name: r.club_name, tactical: r.tactical, man_management: r.man_management, judging: r.judging, motivating: r.motivating, working_youngsters: r.working_youngsters, physio_level: r.physio_level, wage_weekly: r.wage_weekly, photo_path: r.photo_path }).collect())
 }
 pub async fn list_coaches(pool: &SqlitePool) -> Result<Vec<StaffRow>, String> {
     #[derive(sqlx::FromRow)]
     #[allow(dead_code)]
-    struct Sr { id: i64, first_name: String, last_name: String, common_name: String, nation: String, nation_id: i64, role: String, club_id: Option<i64>, club_name: Option<String>, tactical: i64, man_management: i64, judging: i64, motivating: i64, working_youngsters: i64, physio_level: i64, wage_weekly: f64, photo_path: Option<String> }
+    struct Sr { id: i64, first_name: String, last_name: String, common_name: String, nation: String, nation_id: i64, flag_path: Option<String>, role: String, club_id: Option<i64>, club_name: Option<String>, tactical: i64, man_management: i64, judging: i64, motivating: i64, working_youngsters: i64, physio_level: i64, wage_weekly: f64, photo_path: Option<String> }
     let rows = sqlx::query_as::<_, Sr>(
-        "SELECT st.id, st.first_name, st.last_name, COALESCE(st.common_name, st.first_name || ' ' || st.last_name) AS common_name, n.name AS nation, st.nation_id, st.role, st.club_id, cl.name AS club_name, st.tactical, st.man_management, st.judging, st.motivating, st.working_youngsters, st.physio_level, st.wage_weekly, st.photo_path FROM staff st JOIN nations n ON n.id=st.nation_id LEFT JOIN clubs cl ON cl.id=st.club_id WHERE st.role='coach' ORDER BY st.last_name"
+        "SELECT st.id, st.first_name, st.last_name, COALESCE(st.common_name, st.first_name || ' ' || st.last_name) AS common_name, n.name AS nation, st.nation_id, n.flag_path, st.role, st.club_id, cl.name AS club_name, st.tactical, st.man_management, st.judging, st.motivating, st.working_youngsters, st.physio_level, st.wage_weekly, st.photo_path FROM staff st JOIN nations n ON n.id=st.nation_id LEFT JOIN clubs cl ON cl.id=st.club_id WHERE st.role='coach' ORDER BY st.last_name"
     ).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| StaffRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, nation: r.nation, nation_id: r.nation_id, role: r.role, club_id: r.club_id, club_name: r.club_name, tactical: r.tactical, man_management: r.man_management, judging: r.judging, motivating: r.motivating, working_youngsters: r.working_youngsters, physio_level: r.physio_level, wage_weekly: r.wage_weekly, photo_path: r.photo_path }).collect())
+    Ok(rows.into_iter().map(|r| StaffRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, nation: r.nation, nation_id: r.nation_id, flag_path: r.flag_path, role: r.role, club_id: r.club_id, club_name: r.club_name, tactical: r.tactical, man_management: r.man_management, judging: r.judging, motivating: r.motivating, working_youngsters: r.working_youngsters, physio_level: r.physio_level, wage_weekly: r.wage_weekly, photo_path: r.photo_path }).collect())
 }
 pub async fn create_staff(pool: &SqlitePool, first: String, last: String, nation_id: i64, role: String, club_id: Option<i64>, tactical: i64, man_management: i64, judging: i64, motivating: i64, working_youngsters: i64, physio_level: i64, wage_weekly: f64) -> Result<i64, String> {
+    if !["coach","assistant","scout","physio","fitness_coach","goalkeeper_coach","technical_coach","analyst"].contains(&role.as_str()) { return Err("Rol de staff no válido".into()); }
+    for value in [tactical, man_management, judging, motivating, working_youngsters, physio_level] { if !(1..=20).contains(&value) { return Err("Los atributos deben estar entre 1 y 20".into()); } }
+    if wage_weekly < 0.0 { return Err("El salario no puede ser negativo".into()); }
     let (id,): (i64,) = sqlx::query_as("INSERT INTO staff(first_name,last_name,common_name,nation_id,role,club_id,tactical,man_management,judging,motivating,working_youngsters,physio_level,wage_weekly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id")
         .bind(&first).bind(&last).bind(format!("{} {}", first, last)).bind(nation_id).bind(&role).bind(club_id).bind(tactical).bind(man_management).bind(judging).bind(motivating).bind(working_youngsters).bind(physio_level).bind(wage_weekly)
         .fetch_one(pool).await.map_err(|e| e.to_string())?;

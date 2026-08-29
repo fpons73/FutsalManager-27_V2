@@ -44,7 +44,29 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             }
         }
 
-        update_standings(pool, comp_id, hid, aid, home_goals, away_goals).await?;
+        let is_cup: (String,) = sqlx::query_as("SELECT competition_type FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        if is_cup.0 == "league" {
+            update_standings(pool, comp_id, hid, aid, home_goals, away_goals).await?;
+        } else {
+            let winner = if home_goals > away_goals { hid } else if away_goals > home_goals { aid } else {
+                // Desempate reglamentario: prórroga y, si persiste el empate, penaltis.
+                let extra_home = rand::random::<bool>();
+                let extra_away = rand::random::<bool>();
+                if extra_home != extra_away { if extra_home { hid } else { aid } }
+                else if rand::random::<bool>() { hid } else { aid }
+            };
+            if home_goals == away_goals {
+                let extra_home = rand::random::<bool>();
+                let extra_away = rand::random::<bool>();
+                let (pen_home, pen_away) = if extra_home != extra_away { (extra_home as i64, extra_away as i64) } else { (rand::random::<u8>() as i64 % 5, rand::random::<u8>() as i64 % 5) };
+                let resolved_winner = if pen_home > pen_away { hid } else if pen_away > pen_home { aid } else if rand::random::<bool>() { hid } else { aid };
+                sqlx::query("UPDATE cup_ties SET winner_club_id=?, went_to_extra_time=1, went_to_penalties=?, penalty_home_score=?, penalty_away_score=? WHERE match_id=?")
+                    .bind(resolved_winner).bind((pen_home == pen_away) as i64).bind(pen_home).bind(pen_away).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
+            } else {
+                sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE match_id=?").bind(winner).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
+            }
+            crate::competition::generate_calendars(pool).await?;
+        }
 
         let home_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(hid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let away_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(aid).fetch_one(pool).await.map_err(|e| e.to_string())?;
@@ -76,12 +98,28 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         sqlx::query("UPDATE player_states SET match_fitness = MIN(100, match_fitness + 3) WHERE match_fitness < 100").execute(pool).await.ok();
     }
 
+    // El ojeo progresa al pasar los días: cada asignación descubre mejor sus jugadores.
+    sqlx::query("UPDATE scouting_centers SET knowledge_level=MIN(100, knowledge_level+1) WHERE club_id=(SELECT user_club_id FROM game_state WHERE id=1)").execute(pool).await.ok();
+    sqlx::query("UPDATE player_knowledge SET knowledge_percentage=MIN(100, knowledge_percentage + (SELECT knowledge_gain FROM scout_assignments sa WHERE sa.club_id=player_knowledge.club_id AND sa.is_active=1 AND (sa.nation_id=(SELECT nation_id FROM players WHERE id=player_knowledge.player_id) OR sa.target_club_id=(SELECT club_id FROM contracts WHERE player_id=player_knowledge.player_id AND is_active=1 LIMIT 1)) LIMIT 1) WHERE club_id=(SELECT user_club_id FROM game_state WHERE id=1)").execute(pool).await.ok();
+
+    // Desarrollo diario de la cantera.
+    if let Ok((Some(uc),)) = sqlx::query_as::<_, (Option<i64>,)>("SELECT user_club_id FROM game_state WHERE id=1").fetch_one(pool).await {
+        let _ = crate::youth::develop(pool, uc).await;
+    }
+
     // Random incoming offers
     {
         let (user_club,): (Option<i64>,) = sqlx::query_as("SELECT user_club_id FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
         if let Some(uc) = user_club {
             let _ = crate::transfer::generate_incoming_offers(pool, uc).await;
         }
+    }
+
+    // Devolver automáticamente los jugadores cedidos cuando vence su préstamo.
+    let expired_loans: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT loan.id, loan.player_id, loan.loan_parent_id FROM contracts loan WHERE loan.loan_parent_id IS NOT NULL AND loan.is_active=1 AND loan.loan_until <= ?").bind(&next_s).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (loan_id, player_id, parent_id) in expired_loans {
+        sqlx::query("UPDATE contracts SET is_active=0 WHERE id=?").bind(loan_id).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE contracts SET is_active=1 WHERE id=? AND player_id=?").bind(parent_id).bind(player_id).execute(pool).await.map_err(|e| e.to_string())?;
     }
 
     // Auto-recover injuries past return date

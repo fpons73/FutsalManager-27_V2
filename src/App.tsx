@@ -9,10 +9,16 @@ import FixturesView from "./components/screens/FixturesView";
 import LiveMatch from "./components/screens/LiveMatch";
 import TacticsSetup from "./components/screens/TacticsSetup";
 import MarketView from "./components/screens/MarketView";
+import ScoutingView from "./components/screens/ScoutingView";
 import InboxView from "./components/screens/InboxView";
 import TrainingView from "./components/screens/TrainingView";
 import FinanceView from "./components/screens/FinanceView";
 import EditorView from "./components/screens/EditorView";
+import YouthView from "./components/screens/YouthView";
+import SeasonMovements from "./components/screens/SeasonMovements";
+import HonoursView from "./components/screens/HonoursView";
+import SavesView from "./components/screens/SavesView";
+import AppShell from "./components/AppShell";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { screen, setScreen, gameState, userClubId } = useStore();
@@ -36,14 +42,16 @@ function Shell({ children }: { children: React.ReactNode }) {
     { id: "fixtures", label: "Calendario" },
     { id: "tactics", label: "Partido" },
     { id: "market", label: "Mercado" },
+    { id: "scouting", label: "Ojeo" },
     { id: "training", label: "Entreno" },
+    { id: "youth", label: "Cantera" },
     { id: "finance", label: "Finanzas" },
     { id: "inbox", label: "Buzón", badge: unread },
-    { id: "editor", label: "Editor" },
+    ...(!gameState ? [{ id: "editor" as typeof screen, label: "Editor" }] : []),
   ];
 
   return (
-    <div className="min-h-screen bg-fm-bg">
+    <AppShell unread={unread}>
       <header className="sticky top-0 z-10 border-b border-fm-border bg-fm-panel/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 lg:px-6">
           <div className="flex items-center gap-3">
@@ -62,7 +70,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main>{children}</main>
-    </div>
+    </AppShell>
   );
 }
 
@@ -84,9 +92,9 @@ function MatchFlow() {
 }
 
 export default function App() {
-  const { screen } = useStore();
-  // Editor accesible incluso sin partida
-  if ((screen as string) === "editor") {
+  const { screen, gameState } = useStore();
+  // El Editor solo está disponible cuando no hay una partida en curso.
+  if ((screen as string) === "editor" && !gameState) {
     return (
       <div className="min-h-screen bg-fm-bg">
         <div className="sticky top-0 z-10 border-b border-fm-border bg-fm-panel/95 backdrop-blur">
@@ -108,9 +116,14 @@ export default function App() {
       {screen === "fixtures" && <FixturesView />}
       {screen === "tactics" && <MatchFlow />}
       {screen === "market" && <MarketView />}
+      {screen === "scouting" && <ScoutingView />}
       {screen === "inbox" && <InboxView />}
       {screen === "training" && <TrainingView />}
+      {screen === "youth" && <YouthView />}
       {screen === "finance" && <FinanceView />}
+      {(screen as string) === "movements" && <SeasonMovements />}
+      {(screen as string) === "honours" && <HonoursView />}
+      {screen === "saves" && <SavesView />}
       {(screen as string) === "editor" && <EditorView />}
     </Shell>
   );

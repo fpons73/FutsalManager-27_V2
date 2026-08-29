@@ -11,6 +11,9 @@ pub struct TrainingRow {
 }
 
 #[derive(Serialize, Clone)]
+pub struct StaffImpact { pub coach:i64, pub assistant:i64, pub scout:i64, pub youth:i64, pub physio:i64, pub training_bonus:i64, pub scouting_bonus:i64, pub injury_reduction:i64 }
+
+#[derive(Serialize, Clone)]
 pub struct ProgressRow {
     pub player_id: i64,
     pub name: String,
@@ -19,6 +22,22 @@ pub struct ProgressRow {
     pub pa: i64,
     pub age: i64,
     pub improvement: f64,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TacticalAutomation { pub id:i64, pub name:String, pub trigger_type:String, pub threshold:i64, pub formation:String, pub tempo:i64, pub pressing:i64, pub defensive_line:i64, pub width:i64, pub enabled:bool, pub training_level:i64 }
+
+pub async fn get_automations(pool: &SqlitePool, club_id: i64) -> Result<Vec<TacticalAutomation>, String> {
+    let rows: Vec<(i64,String,String,i64,String,i64,i64,i64,i64,i64,i64)> = sqlx::query_as("SELECT id,name,trigger_type,threshold,formation,tempo,pressing,defensive_line,width,enabled,training_level FROM tactical_automations WHERE club_id=? ORDER BY id").bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|(id,name,trigger_type,threshold,formation,tempo,pressing,defensive_line,width,enabled,training_level)| TacticalAutomation { id,name,trigger_type,threshold,formation,tempo,pressing,defensive_line,width,enabled:enabled != 0,training_level }).collect())
+}
+
+pub async fn set_automation(pool: &SqlitePool, club_id:i64, name:String, trigger_type:String, threshold:i64, formation:String, tempo:i64, pressing:i64, defensive_line:i64, width:i64, enabled:bool) -> Result<(), String> {
+    if name.trim().is_empty() { return Err("El automatismo necesita un nombre".into()); }
+    if !(0..=100).contains(&threshold) || !(0..=100).contains(&tempo) || !(0..=100).contains(&pressing) || !(0..=100).contains(&defensive_line) || !(0..=100).contains(&width) { return Err("Los valores tácticos deben estar entre 0 y 100".into()); }
+    sqlx::query("INSERT INTO tactical_automations(club_id,name,trigger_type,threshold,formation,tempo,pressing,defensive_line,width,enabled,training_level) VALUES(?,?,?,?,?,?,?,?,?,?,0) ON CONFLICT(club_id,name) DO UPDATE SET trigger_type=excluded.trigger_type,threshold=excluded.threshold,formation=excluded.formation,tempo=excluded.tempo,pressing=excluded.pressing,defensive_line=excluded.defensive_line,width=excluded.width,enabled=excluded.enabled")
+        .bind(club_id).bind(name).bind(trigger_type).bind(threshold).bind(formation).bind(tempo).bind(pressing).bind(defensive_line).bind(width).bind(enabled as i64).execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub async fn get_schedule(pool: &SqlitePool, club_id: i64) -> Result<Vec<TrainingRow>, String> {
@@ -63,6 +82,7 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let dob_d = chrono::NaiveDate::parse_from_str(&dob, "%Y-%m-%d").unwrap_or(today);
         let age = ((today - dob_d).num_days()/365) as i64;
         let (prof,): (i64,) = sqlx::query_as("SELECT professionalism FROM player_attributes WHERE player_id=?").bind(pid).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let staff: (i64,i64,i64,i64,i64,i64) = sqlx::query_as("SELECT COALESCE(MAX(tactical),0),COALESCE(MAX(working_youngsters),0),COALESCE(MAX(physio_level),0),COALESCE(MAX(man_management),0),COALESCE(MAX(judging),0),COALESCE(MAX(motivating),0) FROM staff WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
 
         if ca >= pa { continue; }
 
@@ -78,7 +98,8 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let prof_factor = prof as f64 / 12.0;
         let avg_intensity: f64 = schedule.iter().map(|s| s.intensity as f64).sum::<f64>() / schedule.len() as f64 / 80.0;
 
-        let improvement = 0.12 * age_factor * pot_factor * prof_factor * avg_intensity;
+        let staff_factor = 0.75 + (staff.0.max(staff.1) as f64 / 20.0) * 0.5;
+        let improvement = 0.12 * age_factor * pot_factor * prof_factor * avg_intensity * staff_factor;
         if improvement < 0.02 { continue; }
 
         let new_ca = ((ca as f64 + improvement).round() as i64).min(pa).min(200);
@@ -94,7 +115,8 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
             sqlx::query(&q).bind(pid).execute(pool).await.map_err(|e| e.to_string())?;
         }
 
-        if rand::random::<f64>() < 0.008 {
+        let injury_risk = (0.008 * (1.25 - staff.2 as f64 / 40.0)).clamp(0.001, 0.012);
+        if rand::random::<f64>() < injury_risk {
             let types = ["Tobillo","Rodilla","Isquiotibial","Gemelo","Hombro"];
             let t = types[rand::random::<usize>() % types.len()];
             let days = rand::random::<u64>() % 21 + 7;

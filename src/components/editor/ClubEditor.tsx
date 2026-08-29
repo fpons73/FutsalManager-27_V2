@@ -17,6 +17,8 @@ export default function ClubEditor({ club, nations, onClose }: { club: any; nati
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [finance, setFinance] = useState<any|null>(null);
+  const [financeMsg, setFinanceMsg] = useState<string|null>(null);
 
   const refresh = async () => {
     try {
@@ -29,7 +31,7 @@ export default function ClubEditor({ club, nations, onClose }: { club: any; nati
       setCoaches(c); setStaff(st); setSquad(sq); setAllPlayers(all);
     } catch (e) { setMsg(String(e)); }
   };
-  useEffect(() => { refresh(); }, [club.id]);
+  useEffect(() => { refresh(); invoke<any>("editor_get_finance", { clubId: club.id }).then(setFinance).catch(()=>{}); }, [club.id]);
 
   const setCoach = async (id: number | null) => {
     try { await invoke("editor_set_coach", { clubId: club.id, staffId: id }); setCoachId(id); setMsg("Entrenador asignado"); refresh(); } catch (e){ setMsg(String(e)); }
@@ -84,7 +86,9 @@ export default function ClubEditor({ club, nations, onClose }: { club: any; nati
           {club.short_name && <div className="mt-2 text-xs text-fm-dim">Corto: {club.short_name}</div>}
         </section>
 
-        {/* Entrenador */}
+        {finance && <section className="mt-4 rounded-lg border border-fm-border bg-fm-bg p-3"><div className="mb-2 text-xs font-bold uppercase tracking-widest text-fm-dim">Economía</div>{financeMsg&&<div className="mb-2 text-xs text-fm-accent">{financeMsg}</div>}<div className="grid gap-2 sm:grid-cols-3"><label className="text-xs text-fm-dim">Balance<input type="number" value={finance.balance} onChange={e=>setFinance({...finance,balance:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1"/></label><label className="text-xs text-fm-dim">Presupuesto fichajes<input type="number" value={finance.transfer_budget} onChange={e=>setFinance({...finance,transfer_budget:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1"/></label><label className="text-xs text-fm-dim">Presupuesto salarial<input type="number" value={finance.wage_budget} onChange={e=>setFinance({...finance,wage_budget:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1"/></label><label className="text-xs text-fm-dim">Patrocinio acumulado<input type="number" value={finance.sponsorship} onChange={e=>setFinance({...finance,sponsorship:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1"/></label><label className="text-xs text-fm-dim">Taquilla acumulada<input type="number" value={finance.ticket_income} onChange={e=>setFinance({...finance,ticket_income:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1"/></label><label className="text-xs text-fm-dim">Premios acumulados<input type="number" value={finance.prize_money} onChange={e=>setFinance({...finance,prize_money:Number(e.target.value)})} className="mt-1 w-full rounded border border-fm-panel bg-fm-panel px-2 py-1"/></label></div><button onClick={async()=>{try{await invoke("editor_update_finance",{clubId:club.id,balance:finance.balance,transferBudget:finance.transfer_budget,wageBudget:finance.wage_budget,sponsorship:finance.sponsorship,ticketIncome:finance.ticket_income,prizeMoney:finance.prize_money});setFinanceMsg("Economía guardada");}catch(e){setFinanceMsg(String(e));}}} className="mt-3 rounded bg-fm-accent px-3 py-1.5 text-sm font-bold text-black">Guardar economía</button></section>}
+
+      {/* Entrenador */}
         <section className="rounded-lg border border-fm-border bg-fm-bg p-3">
           <div className="mb-2 text-xs font-bold uppercase tracking-widest text-fm-dim">Entrenador</div>
           <div className="flex flex-wrap items-center gap-2">
@@ -105,7 +109,7 @@ export default function ClubEditor({ club, nations, onClose }: { club: any; nati
       {/* Staff */}
       <section className="mt-4 rounded-lg border border-fm-border bg-fm-bg p-3">
         <div className="mb-2 flex items-center justify-between">
-          <div className="text-xs font-bold uppercase tracking-widest text-fm-dim">Cuerpo técnico ({staff.length})</div>
+          <div className="text-xs font-bold uppercase tracking-widest text-fm-dim">Cuerpo técnico ({staff.length}) · preparadores incluidos</div>
           <div className="flex gap-1">
             {ROLES.map((r)=> (
               <button key={r} onClick={()=>addStaff(r)} className="rounded bg-fm-panel2 px-2 py-1 text-xs font-semibold text-fm-dim hover:text-white">+ {r}</button>

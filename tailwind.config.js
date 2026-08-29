@@ -5,16 +5,16 @@ export default {
     extend: {
       colors: {
         fm: {
-          bg: "#101418",
-          panel: "#181d24",
-          panel2: "#1f2630",
-          border: "#2a3340",
-          accent: "#00c853",
-          accent2: "#2979ff",
-          warn: "#ffb300",
-          danger: "#ff5252",
-          text: "#e8eaed",
-          dim: "#9aa4b0"
+          bg: "#08111f",
+          panel: "#101d2f",
+          panel2: "#172840",
+          border: "#263a55",
+          accent: "#22d3c5",
+          accent2: "#60a5fa",
+          warn: "#fbbf24",
+          danger: "#fb7185",
+          text: "#f8fafc",
+          dim: "#94a3b8"
         }
       }
     }

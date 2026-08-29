@@ -61,6 +61,25 @@ pub async fn editor_release_player(state: State<'_, AppState>, player_id: i64) -
     crate::editor::release_player(&pool, player_id).await
 }
 #[tauri::command]
+pub async fn editor_list_stadiums(state: State<'_, AppState>) -> Result<Vec<crate::editor::StadiumRow>, String> { let pool=pool_opt(&state)?.ok_or("No hay editor activo")?; crate::editor::list_stadiums(&pool).await }
+#[tauri::command]
+pub async fn editor_create_stadium(state: State<'_, AppState>, name:String, city_id:Option<i64>, capacity:i64, pitch_type:String)->Result<i64,String>{let pool=pool_opt(&state)?.ok_or("No hay editor activo")?;crate::editor::create_stadium(&pool,name,city_id,capacity,pitch_type).await}
+#[tauri::command]
+pub async fn editor_update_stadium(state: State<'_, AppState>, id:i64,name:String,city_id:Option<i64>,capacity:i64,pitch_type:String)->Result<(),String>{let pool=pool_opt(&state)?.ok_or("No hay editor activo")?;crate::editor::update_stadium(&pool,id,name,city_id,capacity,pitch_type).await}
+#[tauri::command]
+pub async fn editor_delete_stadium(state: State<'_, AppState>, id:i64)->Result<(),String>{let pool=pool_opt(&state)?.ok_or("No hay editor activo")?;crate::editor::delete_stadium(&pool,id).await}
+
+#[tauri::command]
+pub async fn editor_get_finance(state: State<'_, AppState>, club_id:i64)->Result<crate::finance::FinanceRow,String>{let pool=pool_opt(&state)?.ok_or("No hay editor activo")?;crate::editor::get_finance(&pool,club_id).await}
+#[tauri::command]
+pub async fn editor_update_finance(state: State<'_, AppState>, club_id:i64,balance:f64,transfer_budget:f64,wage_budget:f64,sponsorship:f64,ticket_income:f64,prize_money:f64)->Result<(),String>{let pool=pool_opt(&state)?.ok_or("No hay editor activo")?;crate::editor::update_finance(&pool,club_id,balance,transfer_budget,wage_budget,sponsorship,ticket_income,prize_money).await}
+
+#[tauri::command]
+pub async fn editor_list_contracts(state: State<'_, AppState>) -> Result<Vec<crate::editor::ContractEditorRow>, String> { let pool=pool_opt(&state)?.ok_or("No hay partida")?; crate::editor::list_contracts(&pool).await }
+#[tauri::command]
+pub async fn editor_update_contract(state: State<'_, AppState>, id:i64, club_id:i64, wage:f64, start_date:String, end_date:String, release_clause:Option<f64>, role:String, signing_bonus:f64, appearance_bonus:f64, clean_sheet_bonus:f64, is_active:i64) -> Result<(),String> { let pool=pool_opt(&state)?.ok_or("No hay partida")?; crate::editor::update_contract(&pool,id,club_id,wage,start_date,end_date,release_clause,role,signing_bonus,appearance_bonus,clean_sheet_bonus,is_active).await }
+
+#[tauri::command]
 pub async fn editor_list_competitions(state: State<'_, AppState>) -> Result<Vec<crate::editor::CompetitionRow>, String> {
     let pool = state.pool.lock().map_err(|e| e.to_string())?.clone().ok_or("No hay partida")?;
     crate::editor::list_competitions(&pool).await
@@ -108,9 +127,9 @@ pub async fn editor_update_club(state: State<'_, AppState>, id: i64, name: Strin
     crate::editor::update_club(&pool, id, name, short_name, nation_id, city, stadium, capacity, reputation, c1, c2).await
 }
 #[tauri::command]
-pub async fn editor_update_player(state: State<'_, AppState>, id: i64, first: String, last: String, nation_id: i64, club_id: Option<i64>, ca: i64, pa: i64, pos: String) -> Result<(), String> {
+pub async fn editor_update_player(state: State<'_, AppState>, id: i64, first: String, last: String, nation_id: i64, second_nation_id: Option<i64>, secondary_position: Option<String>, club_id: Option<i64>, ca: i64, pa: i64, pos: String) -> Result<(), String> {
     let pool = state.pool.lock().map_err(|e| e.to_string())?.clone().ok_or("No hay partida")?;
-    crate::editor::update_player(&pool, id, first, last, nation_id, club_id, ca, pa, pos).await
+    crate::editor::update_player(&pool, id, first, last, nation_id, second_nation_id, secondary_position, club_id, ca, pa, pos).await
 }
 #[tauri::command]
 pub async fn editor_update_competition(state: State<'_, AppState>, id: i64, name: String, nation_id: Option<i64>, tier: Option<i64>, total_teams: i64, season: String) -> Result<(), String> {
