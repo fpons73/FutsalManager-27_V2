@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ImagePicker from "./ImagePicker";
+import Flag from "../Flag";
 
 export default function NationEditor({ nation, confeds, onClose }: { nation:any; confeds:any[]; onClose:()=>void }) {
   const [name, setName] = useState(nation.name ?? "");
@@ -39,7 +40,7 @@ export default function NationEditor({ nation, confeds, onClose }: { nation:any;
         {/* Bandera del país */}
         <div className="rounded-lg border border-fm-border bg-fm-bg p-3">
           <div className="mb-2 text-xs font-bold uppercase tracking-widest text-fm-dim">Bandera del país</div>
-          <ImagePicker command="editor_set_nation_flag" entityId={nation.id} label="Bandera" value={nation.flag_path ?? null} prefix="🏳" />
+          <div className="flex items-center gap-2"><Flag src={nation.flag_path} alt={nation.name} className="h-4 w-6" /><ImagePicker command="editor_set_nation_flag" entityId={nation.id} label="Bandera" value={nation.flag_path ?? null} prefix="🏳" /></div>
         </div>
 
         {/* Datos del país */}

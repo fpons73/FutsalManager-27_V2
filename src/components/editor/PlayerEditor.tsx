@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import ImagePicker from "./ImagePicker";
+import Flag from "../Flag";
 
 type Attr = { ca:number; pa:number; position:string } & Record<string, number>;
 
@@ -103,7 +104,7 @@ export default function PlayerEditor({ player, nations, onClose }: { player:any;
   return (
     <div className="rounded-xl border border-sky-500/30 bg-fm-panel p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-lg font-black"><span className="mr-2 inline-flex items-center gap-1"><img src={player.flag_path ?? undefined} alt={player.nation} title={player.nation} className="h-4 w-6 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{player.second_flag_path && <img src={player.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-4 w-6 rounded object-cover" />}</span>Jugador · {player.first_name} {player.last_name} <span className="text-fm-dim">(ID {player.id})</span></h3>
+        <h3 className="text-lg font-black"><span className="mr-2 inline-flex items-center gap-1"><Flag src={player.flag_path} alt={player.nation} className="h-4 w-6" />{player.second_flag_path && <Flag src={player.second_flag_path} alt="Segunda nacionalidad" className="h-4 w-6" />}</span>Jugador · {player.first_name} {player.last_name} <span className="text-fm-dim">(ID {player.id})</span></h3>
         <button onClick={onClose} className="rounded-lg border border-fm-border px-3 py-1 text-sm text-fm-dim hover:text-white">Cerrar</button>
       </div>
       {msg && <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">{msg}</div>}
