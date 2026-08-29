@@ -279,6 +279,7 @@ pub async fn start_live_match(state: State<'_, AppState>, match_id: i64) -> Resu
 async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, snapshot: &MatchSnapshot) -> Result<(), String> {
     let (status,): (String,) = sqlx::query_as("SELECT status FROM matches WHERE id=?").bind(info.match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
     if status == "finished" { return Ok(()); }
+    let (competition_type,): (String,) = sqlx::query_as("SELECT c.competition_type FROM competitions c JOIN matches m ON m.competition_id=c.id WHERE m.id=?").bind(info.match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
     sqlx::query("UPDATE matches SET status='finished', home_score=?, away_score=?, home_shots=?, away_shots=?, home_fouls=?, away_fouls=?, home_possession=?, away_possession=? WHERE id=?")
         .bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64)
@@ -292,13 +293,13 @@ async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, s
             .bind(event.player_id.map(|id| id as i64)).bind(if event.team_id == 0 { info.home_club_id } else { info.away_club_id })
             .bind(&event.description).bind(event.x).bind(event.y).execute(&mut *tx).await.map_err(|e| e.to_string())?;
     }
-    sqlx::query("UPDATE league_standings SET played=played+1, won=won+CASE WHEN club_id=? AND ? > ? OR club_id=? AND ? > ? THEN 1 ELSE 0 END, drawn=drawn+CASE WHEN ? = ? THEN 1 ELSE 0 END, lost=lost+CASE WHEN club_id=? AND ? < ? OR club_id=? AND ? < ? THEN 1 ELSE 0 END, goals_for=goals_for+CASE WHEN club_id=? THEN ? ELSE ? END, goals_against=goals_against+CASE WHEN club_id=? THEN ? ELSE ? END, goal_difference=goal_difference+CASE WHEN club_id=? THEN ?-? ELSE ?-? END, points=points+CASE WHEN club_id=? AND ? > ? THEN 3 WHEN club_id=? AND ? = ? THEN 1 WHEN club_id=? AND ? > ? THEN 3 ELSE 0 END WHERE competition_id=(SELECT competition_id FROM matches WHERE id=?) AND club_id IN (?, ?)")
+    if competition_type == "league" { sqlx::query("UPDATE league_standings SET played=played+1, won=won+CASE WHEN club_id=? AND ? > ? OR club_id=? AND ? > ? THEN 1 ELSE 0 END, drawn=drawn+CASE WHEN ? = ? THEN 1 ELSE 0 END, lost=lost+CASE WHEN club_id=? AND ? < ? OR club_id=? AND ? < ? THEN 1 ELSE 0 END, goals_for=goals_for+CASE WHEN club_id=? THEN ? ELSE ? END, goals_against=goals_against+CASE WHEN club_id=? THEN ? ELSE ? END, goal_difference=goal_difference+CASE WHEN club_id=? THEN ?-? ELSE ?-? END, points=points+CASE WHEN club_id=? AND ? > ? THEN 3 WHEN club_id=? AND ? = ? THEN 1 WHEN club_id=? AND ? > ? THEN 3 ELSE 0 END WHERE competition_id=(SELECT competition_id FROM matches WHERE id=?) AND club_id IN (?, ?)")
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
         .bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64)
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
         .bind(info.home_club_id).bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(info.away_club_id).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64)
-        .bind(info.match_id).bind(info.home_club_id).bind(info.away_club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        .bind(info.match_id).bind(info.home_club_id).bind(info.away_club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?; }
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
