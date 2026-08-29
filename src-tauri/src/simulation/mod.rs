@@ -169,6 +169,15 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         sqlx::query("UPDATE contracts SET is_active=1 WHERE id=? AND player_id=?").bind(parent_id).bind(player_id).execute(pool).await.map_err(|e| e.to_string())?;
     }
 
+    // Alertas de contratos que vencen pronto y liberación automática al expirar.
+    let (today_date,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let today = NaiveDate::parse_from_str(&today_date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let alert_date = (today + chrono::Duration::days(60)).format("%Y-%m-%d").to_string();
+    let expiring: Vec<(i64,i64,String,String)> = sqlx::query_as("SELECT c.id,c.club_id,c.end_date,p.common_name FROM contracts c JOIN players p ON p.id=c.player_id WHERE c.is_active=1 AND c.loan_parent_id IS NULL AND c.end_date<=? AND c.end_date>=?").bind(&alert_date).bind(&today_date).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (_, club_id, end_date, player_name) in expiring { let _ = sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'board',?,?,?,1)").bind(club_id).bind(format!("Contrato próximo a vencer: {}", player_name)).bind(format!("El contrato de {} termina el {}. Considera negociar una renovación.", player_name, end_date)).bind(&today_date).execute(pool).await; }
+    let expired: Vec<(i64,i64,String)> = sqlx::query_as("SELECT c.id,c.club_id,p.common_name FROM contracts c JOIN players p ON p.id=c.player_id WHERE c.is_active=1 AND c.loan_parent_id IS NULL AND c.end_date < ?").bind(&next_s).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (contract_id,club_id,player_name) in expired { sqlx::query("UPDATE contracts SET is_active=0 WHERE id=?").bind(contract_id).execute(pool).await.map_err(|e| e.to_string())?;let _=sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'board',?,?,?,1)").bind(club_id).bind(format!("Agente libre: {}",player_name)).bind(format!("El contrato de {} ha expirado y el jugador queda libre.",player_name)).bind(&next_s).execute(pool).await; }
+
     // Auto-recover injuries past return date
     sqlx::query("UPDATE injuries SET is_active=0 WHERE is_active=1 AND expected_return_date <= ?").bind(&next_s).execute(pool).await.ok();
 
