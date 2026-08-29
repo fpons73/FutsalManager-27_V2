@@ -65,12 +65,15 @@ pub struct StandingRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct FixtureRaw { id:i64, round:i64, date:String, home_id:i64, home_name:String, home_short:String, away_id:i64, away_name:String, away_short:String, home_score:i64, away_score:i64, status:String, competition_type:String, cup_winner_id:Option<i64>, extra:i64, penalties:i64, penalty_home:i64, penalty_away:i64 }
+struct FixtureRaw { id:i64, round:i64, leg:i64, aggregate_home_score:i64, aggregate_away_score:i64, date:String, home_id:i64, home_name:String, home_short:String, away_id:i64, away_name:String, away_short:String, home_score:i64, away_score:i64, status:String, competition_type:String, cup_winner_id:Option<i64>, extra:i64, penalties:i64, penalty_home:i64, penalty_away:i64 }
 
 #[derive(Serialize)]
 pub struct FixtureRow {
     pub id: i64,
     pub round: i64,
+    pub leg: i64,
+    pub aggregate_home_score: i64,
+    pub aggregate_away_score: i64,
     pub date: String,
     pub home_id: i64,
     pub home_name: String,
@@ -237,9 +240,9 @@ pub async fn get_standings(state: State<'_, AppState>, competition_id: i64) -> R
 pub async fn get_fixtures(state: State<'_, AppState>, competition_id: i64) -> Result<Vec<FixtureRow>, String> {
     let pool = get_pool(&state).await?;
     let rows = sqlx::query_as::<_, FixtureRaw>(
-        "SELECT m.id, m.round, m.date, m.home_club_id, hc.name, hc.short_name, m.away_club_id, ac.name, ac.short_name, m.home_score, m.away_score, m.status, comp.competition_type, ct.winner_club_id, COALESCE(ct.went_to_extra_time,0), COALESCE(ct.went_to_penalties,0), COALESCE(ct.penalty_home_score,0), COALESCE(ct.penalty_away_score,0) FROM matches m JOIN competitions comp ON comp.id=m.competition_id JOIN clubs hc ON hc.id=m.home_club_id JOIN clubs ac ON ac.id=m.away_club_id LEFT JOIN cup_ties ct ON ct.match_id=m.id WHERE m.competition_id=? ORDER BY m.round, m.date, m.id"
+        "SELECT m.id, m.round, COALESCE(ct.leg,1), COALESCE(ct.aggregate_home_score,0), COALESCE(ct.aggregate_away_score,0), m.date, m.home_club_id, hc.name, hc.short_name, m.away_club_id, ac.name, ac.short_name, m.home_score, m.away_score, m.status, comp.competition_type, ct.winner_club_id, COALESCE(ct.went_to_extra_time,0), COALESCE(ct.went_to_penalties,0), COALESCE(ct.penalty_home_score,0), COALESCE(ct.penalty_away_score,0) FROM matches m JOIN competitions comp ON comp.id=m.competition_id JOIN clubs hc ON hc.id=m.home_club_id JOIN clubs ac ON ac.id=m.away_club_id LEFT JOIN cup_ties ct ON ct.match_id=m.id WHERE m.competition_id=? ORDER BY m.round, m.date, m.id"
     ).bind(competition_id).fetch_all(&pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| FixtureRow { id:r.id, round:r.round, date:r.date, home_id:r.home_id, home_name:r.home_name, home_short:r.home_short, away_id:r.away_id, away_name:r.away_name, away_short:r.away_short, home_score:r.home_score, away_score:r.away_score, status:r.status, competition_type:r.competition_type, cup_winner_id:r.cup_winner_id, went_to_extra_time:r.extra != 0, went_to_penalties:r.penalties != 0, penalty_home_score:r.penalty_home, penalty_away_score:r.penalty_away }).collect())
+    Ok(rows.into_iter().map(|r| FixtureRow { id:r.id, round:r.round, leg:r.leg, aggregate_home_score:r.aggregate_home_score, aggregate_away_score:r.aggregate_away_score, date:r.date, home_id:r.home_id, home_name:r.home_name, home_short:r.home_short, away_id:r.away_id, away_name:r.away_name, away_short:r.away_short, home_score:r.home_score, away_score:r.away_score, status:r.status, competition_type:r.competition_type, cup_winner_id:r.cup_winner_id, went_to_extra_time:r.extra != 0, went_to_penalties:r.penalties != 0, penalty_home_score:r.penalty_home, penalty_away_score:r.penalty_away }).collect())
 }
 
 #[derive(sqlx::FromRow)]
@@ -311,7 +314,7 @@ pub async fn get_competitions(state: State<'_, AppState>) -> Result<Vec<CompRow>
 pub async fn get_next_fixture(state: State<'_, AppState>, club_id: i64) -> Result<Option<FixtureRow>, String> {
     let pool = get_pool(&state).await?;
     let row = sqlx::query_as::<_, FixtureRaw>(
-        "SELECT m.id, m.round, m.date, m.home_club_id, hc.name, hc.short_name, m.away_club_id, ac.name, ac.short_name, m.home_score, m.away_score, m.status, comp.competition_type, ct.winner_club_id FROM matches m JOIN competitions comp ON comp.id=m.competition_id JOIN clubs hc ON hc.id=m.home_club_id JOIN clubs ac ON ac.id=m.away_club_id LEFT JOIN cup_ties ct ON ct.match_id=m.id WHERE (m.home_club_id=? OR m.away_club_id=?) AND m.status='scheduled' AND m.date >= (SELECT game_date FROM game_state WHERE id=1) ORDER BY m.date, m.round LIMIT 1"
+        "SELECT m.id, m.round, COALESCE(ct.leg,1), COALESCE(ct.aggregate_home_score,0), COALESCE(ct.aggregate_away_score,0), m.date, m.home_club_id, hc.name, hc.short_name, m.away_club_id, ac.name, ac.short_name, m.home_score, m.away_score, m.status, comp.competition_type, ct.winner_club_id FROM matches m JOIN competitions comp ON comp.id=m.competition_id JOIN clubs hc ON hc.id=m.home_club_id JOIN clubs ac ON ac.id=m.away_club_id LEFT JOIN cup_ties ct ON ct.match_id=m.id WHERE (m.home_club_id=? OR m.away_club_id=?) AND m.status='scheduled' AND m.date >= (SELECT game_date FROM game_state WHERE id=1) ORDER BY m.date, m.round LIMIT 1"
     ).bind(club_id).bind(club_id).fetch_optional(&pool).await.map_err(|e| e.to_string())?;
-    Ok(row.map(|r| FixtureRow { id:r.id, round:r.round, date:r.date, home_id:r.home_id, home_name:r.home_name, home_short:r.home_short, away_id:r.away_id, away_name:r.away_name, away_short:r.away_short, home_score:r.home_score, away_score:r.away_score, status:r.status, competition_type:r.competition_type, cup_winner_id:r.cup_winner_id, went_to_extra_time:r.extra != 0, went_to_penalties:r.penalties != 0, penalty_home_score:r.penalty_home, penalty_away_score:r.penalty_away }))
+    Ok(row.map(|r| FixtureRow { id:r.id, round:r.round, leg:r.leg, aggregate_home_score:r.aggregate_home_score, aggregate_away_score:r.aggregate_away_score, date:r.date, home_id:r.home_id, home_name:r.home_name, home_short:r.home_short, away_id:r.away_id, away_name:r.away_name, away_short:r.away_short, home_score:r.home_score, away_score:r.away_score, status:r.status, competition_type:r.competition_type, cup_winner_id:r.cup_winner_id, went_to_extra_time:r.extra != 0, went_to_penalties:r.penalties != 0, penalty_home_score:r.penalty_home, penalty_away_score:r.penalty_away }))
 }

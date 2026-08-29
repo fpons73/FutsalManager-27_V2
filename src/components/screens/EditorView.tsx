@@ -12,7 +12,7 @@ const emptyClub = { id: 0, name: "", short: "", nation: 1, city: "", stadium: ""
 const emptyPlayer = { id: 0, first: "", last: "", nation: 1, secondNation: "", secondaryPos: "", club: "", ca: 80, pa: 120, pos: "ALA" };
 const emptyStaff = { id: 0, first: "", last: "", nation: 1, role: "assistant", club: "", tactical: 10, manManagement: 12, judging: 12, motivating: 10, workingYoungsters: 10, physioLevel: 10, wage: 600 };
 const emptyNation = { id: 0, name: "", conf: 1, rep: 500, level: 50 };
-const emptyComp = { id: 0, name: "", nation: "", tier: "", teams: 16, season: "2026/2027" };
+const emptyComp = { id: 0, name: "", nation: "", tier: "", teams: 16, season: "2026/2027", groups: 0, teamsPerGroup: 0, qualifiers: 0, twoLegs: false };
 
 export default function EditorView() {
   const [tab, setTab] = useState<Tab>("clubs");
@@ -124,7 +124,7 @@ export default function EditorView() {
   // ---- Competitions ----
   const saveComp = async () => {
     try {
-      if (newComp.id) await invoke("editor_update_competition", { id: newComp.id, name: newComp.name, nationId: newComp.nation ? Number(newComp.nation) : null, tier: newComp.tier ? Number(newComp.tier) : null, totalTeams: newComp.teams, season: newComp.season });
+      if (newComp.id) await invoke("editor_update_competition", { id: newComp.id, name: newComp.name, nationId: newComp.nation ? Number(newComp.nation) : null, tier: newComp.tier ? Number(newComp.tier) : null, totalTeams: newComp.teams, season: newComp.season, groupCount: newComp.groups, teamsPerGroup: newComp.teamsPerGroup, groupQualifiers: newComp.qualifiers, knockoutTwoLegs: newComp.twoLegs ? 1 : 0 });
       else await invoke("editor_create_competition", { name: newComp.name, nationId: newComp.nation ? Number(newComp.nation) : null, tier: newComp.tier ? Number(newComp.tier) : null, totalTeams: newComp.teams, season: newComp.season });
       setMsg(newComp.id ? "Competición actualizada" : "Competición creada");
       setNewComp(emptyComp); load("competitions");
@@ -295,7 +295,7 @@ export default function EditorView() {
                   <select value={newComp.nation} onChange={(e)=>setNewComp({...newComp,nation:e.target.value})} className="rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm"><option value="">Internacional</option>{nations.map((n:any)=><option key={n.id} value={n.id}>{n.name}</option>)}</select>
                   <input placeholder="Tier" value={newComp.tier} onChange={(e)=>setNewComp({...newComp,tier:e.target.value})} className="w-16 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" />
                   <input type="number" placeholder="Equipos" value={newComp.teams} onChange={(e)=>setNewComp({...newComp,teams:Number(e.target.value)})} className="w-24 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" />
-                  <input placeholder="Temporada" value={newComp.season} onChange={(e)=>setNewComp({...newComp,season:e.target.value})} className="w-32 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" />
+                  <input placeholder="Temporada" value={newComp.season} onChange={(e)=>setNewComp({...newComp,season:e.target.value})} className="w-32 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" /><input type="number" min="0" placeholder="Grupos" value={newComp.groups} onChange={(e)=>setNewComp({...newComp,groups:Number(e.target.value)})} className="w-20 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" /><input type="number" min="0" placeholder="Equipos/grupo" value={newComp.teamsPerGroup} onChange={(e)=>setNewComp({...newComp,teamsPerGroup:Number(e.target.value)})} className="w-28 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" /><input type="number" min="0" placeholder="Clasif." value={newComp.qualifiers} onChange={(e)=>setNewComp({...newComp,qualifiers:Number(e.target.value)})} className="w-20 rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm" /><label className="flex items-center gap-1 text-xs text-fm-dim"><input type="checkbox" checked={newComp.twoLegs} onChange={e=>setNewComp({...newComp,twoLegs:e.target.checked})} /> Ida/vuelta</label>
                   <button onClick={saveComp} className="rounded bg-fm-accent px-3 py-1.5 text-sm font-bold text-black">{inEdit(newComp) ? "Guardar" : "Crear"}</button>
                 </div>
               </div>
@@ -304,8 +304,8 @@ export default function EditorView() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-fm-bg text-xs uppercase tracking-widest text-fm-dim"><tr><th className="px-2 py-2 text-left">Competición</th><th className="px-2 py-2">Tipo</th><th className="px-2 py-2">Nación</th><th className="px-2 py-2">Tier</th><th className="px-2 py-2">Equipos</th><th className="px-2 py-2">Temp.</th><th></th></tr></thead>
                     <tbody>{filtered.map((c:any)=><tr key={c.id} className="border-t border-fm-border hover:bg-fm-panel2">
-                      <td className="px-2 py-1.5 font-semibold">{c.name}</td><td className="px-2 py-1.5 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${c.kind==="national_team" ? "bg-violet-500/20 text-violet-300" : "bg-sky-500/20 text-sky-300"}`}>{c.kind==="national_team" ? "Sel." : "Club"}</span></td><td className="px-2 py-1.5 text-xs">{c.nation || "—"}</td><td className="px-2 py-1.5 text-center">{c.tier ?? "—"}</td><td className="px-2 py-1.5 text-center">{c.total_teams ?? "—"}</td><td className="px-2 py-1.5 text-xs">{c.season}</td>
-                      <td className="px-2 py-1.5 text-right space-x-1"><button onClick={()=>setNewComp({ id: c.id, name: c.name, nation: c.nation_id ? String(c.nation_id) : "", tier: c.tier ? String(c.tier) : "", teams: c.total_teams ?? 16, season: c.season })} className="rounded bg-sky-600 px-2 py-0.5 text-xs text-white">Editar</button><button onClick={()=>delComp(c.id)} className="rounded bg-red-600 px-2 py-0.5 text-xs text-white">Borrar</button></td>
+                      <td className="px-2 py-1.5 font-semibold">{c.name}</td><td className="px-2 py-1.5 text-center"><span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${c.kind==="national_team" ? "bg-violet-500/20 text-violet-300" : "bg-sky-500/20 text-sky-300"}`}>{c.kind==="national_team" ? "Sel." : "Club"}</span></td><td className="px-2 py-1.5 text-xs">{c.nation || "—"}</td><td className="px-2 py-1.5 text-center">{c.tier ?? "—"}</td><td className="px-2 py-1.5 text-center">{c.total_teams ?? "—"}</td><td className="px-2 py-1.5 text-xs">{c.season}</td><td className="px-2 py-1.5 text-xs">{c.group_count ? `${c.group_count}×${c.teams_per_group}` : "—"}{c.knockout_two_legs ? " · 2L" : ""}</td>
+                      <td className="px-2 py-1.5 text-right space-x-1"><button onClick={()=>setNewComp({ id: c.id, name: c.name, nation: c.nation_id ? String(c.nation_id) : "", tier: c.tier ? String(c.tier) : "", teams: c.total_teams ?? 16, season: c.season, groups: c.group_count ?? 0, teamsPerGroup: c.teams_per_group ?? 0, qualifiers: c.group_qualifiers ?? 0, twoLegs: Boolean(c.knockout_two_legs) })} className="rounded bg-sky-600 px-2 py-0.5 text-xs text-white">Editar</button><button onClick={()=>delComp(c.id)} className="rounded bg-red-600 px-2 py-0.5 text-xs text-white">Borrar</button></td>
                     </tr>)}</tbody>
                   </table>
                 </div>

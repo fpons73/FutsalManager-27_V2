@@ -26,7 +26,7 @@ export default function FixturesView() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 lg:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-xl font-black">Calendario</h2><p className="text-xs text-fm-dim">{isCup ? "Eliminatoria · partido único" : "Jornadas de liga"}</p>{selected?.champion_name && <p className="mt-1 text-xs text-fm-accent">🏆 Campeón vigente: {selected.champion_name}</p>}</div>
+        <div><h2 className="text-xl font-black">Calendario</h2><p className="text-xs text-fm-dim">{isCup ? (rows.some(r => (r.leg ?? 1) === 2) ? "Eliminatoria · ida y vuelta" : "Eliminatoria · partido único") : "Jornadas de liga"}</p>{selected?.champion_name && <p className="mt-1 text-xs text-fm-accent">🏆 Campeón vigente: {selected.champion_name}</p>}</div>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-full border border-fm-border bg-fm-panel p-0.5">
             <button onClick={()=>setKind("clubs")} className={`rounded-full px-3 py-1 text-xs font-bold ${kind==="clubs" ? "bg-fm-accent text-black" : "text-fm-dim"}`}>Clubes</button>
@@ -49,7 +49,7 @@ export default function FixturesView() {
               {fixtures.map((f)=>(
                 <div key={f.id} className="flex items-center justify-between rounded-lg bg-fm-bg px-3 py-2 text-sm">
                   <span className="font-semibold">{f.home_short}</span>
-                  {f.status==="finished" ? <span className="rounded bg-fm-panel px-2 py-0.5 font-mono font-bold">{f.home_score}-{f.away_score}{isCup && f.went_to_penalties ? ` · pen. ${f.penalty_home_score}-${f.penalty_away_score}` : f.went_to_extra_time ? " · prórroga" : ""}{isCup && f.cup_winner_id ? " · ✓" : ""}</span> : <span className="text-xs text-fm-dim">{f.date}</span>}
+                  {f.status==="finished" ? <span className="rounded bg-fm-panel px-2 py-0.5 text-center font-mono font-bold">{f.home_score}-{f.away_score}{isCup && (f.leg ?? 1) === 2 ? ` · global ${f.aggregate_home_score ?? 0}-${f.aggregate_away_score ?? 0}` : ""}{isCup && f.went_to_penalties ? ` · pen. ${f.penalty_home_score}-${f.penalty_away_score}` : f.went_to_extra_time ? " · prórroga" : ""}{isCup && f.cup_winner_id ? " · ✓" : ""}</span> : <span className="text-xs text-fm-dim">{f.date}</span>}
                   <span className="font-semibold">{f.away_short}</span>
                 </div>
               ))}

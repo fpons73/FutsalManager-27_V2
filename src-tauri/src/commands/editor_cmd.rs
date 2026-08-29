@@ -132,9 +132,9 @@ pub async fn editor_update_player(state: State<'_, AppState>, id: i64, first: St
     crate::editor::update_player(&pool, id, first, last, nation_id, second_nation_id, secondary_position, club_id, ca, pa, pos).await
 }
 #[tauri::command]
-pub async fn editor_update_competition(state: State<'_, AppState>, id: i64, name: String, nation_id: Option<i64>, tier: Option<i64>, total_teams: i64, season: String) -> Result<(), String> {
+pub async fn editor_update_competition(state: State<'_, AppState>, id: i64, name: String, nation_id: Option<i64>, tier: Option<i64>, total_teams: i64, season: String, group_count: i64, teams_per_group: i64, group_qualifiers: i64, knockout_two_legs: i64) -> Result<(), String> {
     let pool = state.pool.lock().map_err(|e| e.to_string())?.clone().ok_or("No hay partida")?;
-    crate::editor::update_competition(&pool, id, name, nation_id, tier, total_teams, season).await
+    crate::editor::update_competition(&pool, id, name, nation_id, tier, total_teams, season, group_count, teams_per_group, group_qualifiers, knockout_two_legs).await
 }
 #[tauri::command]
 pub async fn editor_create_player(state: State<'_, AppState>, first: String, last: String, nation_id: i64, club_id: Option<i64>, ca: i64, pa: i64, pos: String) -> Result<i64, String> {
