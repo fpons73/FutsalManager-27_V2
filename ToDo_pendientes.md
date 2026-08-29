@@ -32,11 +32,16 @@
 
 - [x] Plantillas de selecciones nacionales y jugadores elegibles.
 - [x] Convocatorias configurables y elegibilidad por nacionalidad principal o secundaria.
-- [ ] Seleccionadores y staff internacional.
+- [x] Seleccionadores y staff internacional inicial.
+- [x] Ventanas internacionales y generación de partidos básicos.
+- [x] Pruebas de regresión para elegibilidad, doble nacionalidad, límite de convocatoria e idempotencia.
+- [ ] Torneos internacionales completos y clasificación.
 - [ ] Ventanas internacionales.
 - [ ] Clasificaciones y fases de clasificación.
 - [ ] Mundial, torneos continentales y competiciones internacionales.
 - [ ] Partidos de selecciones integrados en el calendario.
+
+> Incidencias corregidas en el último hito: encabezado duplicado, alias SQL del calendario, decodificación REAL del mercado y banderas comunes del Editor/Ojeo/Mercado.
 
 ## Prioridad 4 — Historial y estadísticas
 

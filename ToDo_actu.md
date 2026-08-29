@@ -116,7 +116,8 @@
 - [x] Mantener la inscripción real de equipos en la división siguiente al cambiar de temporada.
 - [x] Exponer el historial de movimientos mediante API.
 - [x] Añadir pantalla de historial de ascensos y descensos.
-- [ ] Selecciones y torneos internacionales.
+- [x] Base de selecciones, seleccionadores, convocatorias limitadas, ventanas y partidos internacionales iniciales.
+- [ ] Torneos internacionales completos y clasificación.
 - [ ] Historial, palmarés y récords.
 
 ## Hito I — Interfaz y experiencia visual

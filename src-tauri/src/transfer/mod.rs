@@ -96,8 +96,8 @@ pub async fn offer_loan(pool: &SqlitePool, player_id: i64, from_club: i64, to_cl
 }
 
 pub async fn get_free_agents(pool: &SqlitePool, _user_club: i64) -> Result<Vec<MarketPlayer>, String> {
-    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, String, i64, i64, f64)>("SELECT p.id,p.common_name,n.name,n.flag_path,COALESCE(pos.position,'UNI'),ps.current_ability,ps.potential_ability,COALESCE(last.wage_weekly,500) FROM players p JOIN player_states ps ON ps.player_id=p.id JOIN nations n ON n.id=p.nation_id LEFT JOIN (SELECT player_id,MAX(id) id FROM contracts GROUP BY player_id) latest ON latest.player_id=p.id LEFT JOIN contracts last ON last.id=latest.id LEFT JOIN (SELECT player_id,CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END position FROM player_positions) pos ON pos.player_id=p.id WHERE p.id NOT IN (SELECT player_id FROM contracts WHERE is_active=1) AND p.is_retired=0 ORDER BY ps.current_ability DESC LIMIT 50").fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(| (id,name,nation,flag_path,position,ca,pa,wage)| MarketPlayer { id,name,age:25,nation:nation.clone(),position,secondary_position:None,flag_path,second_flag_path:None,ca,pa,club_id:0,club_name:"Agente libre".into(),club_short:"LIBRE".into(),value:0.0,wage,contract_end:"Libre".into(),knowledge:100 }).collect())
+    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, Option<String>, String, i64, i64, f64)>("SELECT p.id,p.common_name,n.name,n.flag_path,n2.flag_path,COALESCE(pos.position,'UNI'),ps.current_ability,ps.potential_ability,COALESCE(last.wage_weekly,500) FROM players p JOIN player_states ps ON ps.player_id=p.id JOIN nations n ON n.id=p.nation_id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id,MAX(id) id FROM contracts GROUP BY player_id) latest ON latest.player_id=p.id LEFT JOIN contracts last ON last.id=latest.id LEFT JOIN (SELECT player_id,CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END position FROM player_positions) pos ON pos.player_id=p.id WHERE p.id NOT IN (SELECT player_id FROM contracts WHERE is_active=1) AND p.is_retired=0 ORDER BY ps.current_ability DESC LIMIT 50").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(| (id,name,nation,flag_path,second_flag_path,position,ca,pa,wage)| MarketPlayer { id,name,age:25,nation:nation.clone(),position,secondary_position:None,flag_path,second_flag_path,ca,pa,club_id:0,club_name:"Agente libre".into(),club_short:"LIBRE".into(),value:0.0,wage,contract_end:"Libre".into(),knowledge:100 }).collect())
 }
 
 pub async fn sign_free_agent(pool: &SqlitePool, player_id: i64, club_id: i64, wage: f64, years: i64) -> Result<String, String> {
@@ -112,23 +112,23 @@ pub async fn sign_free_agent(pool: &SqlitePool, player_id: i64, club_id: i64, wa
 }
 
 pub async fn get_market(pool: &SqlitePool, user_club: i64) -> Result<Vec<MarketPlayer>, String> {
-    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, String, i64, i64, i64, String, String, f64, String)>(
-        "SELECT p.id, p.common_name, n.name, n.flag_path, COALESCE(pp.pos,'UNI'), ps.current_ability, ps.potential_ability, c.club_id, cl.name, cl.short_name, c.wage_weekly, c.end_date FROM players p JOIN contracts c ON c.player_id=p.id AND c.is_active=1 JOIN player_states ps ON ps.player_id=p.id JOIN nations n ON n.id=p.nation_id JOIN clubs cl ON cl.id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id WHERE c.club_id != ? ORDER BY ps.current_ability DESC LIMIT 40"
+    let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, Option<String>, String, i64, i64, i64, String, String, f64, String)>(
+        "SELECT p.id, p.common_name, n.name, n.flag_path, n2.flag_path, COALESCE(pp.pos,'UNI'), ps.current_ability, ps.potential_ability, c.club_id, cl.name, cl.short_name, c.wage_weekly, c.end_date FROM players p JOIN contracts c ON c.player_id=p.id AND c.is_active=1 JOIN player_states ps ON ps.player_id=p.id JOIN nations n ON n.id=p.nation_id LEFT JOIN nations n2 ON n2.id=p.second_nation_id JOIN clubs cl ON cl.id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp ON pp.player_id=p.id WHERE c.club_id != ? ORDER BY ps.current_ability DESC LIMIT 40"
     ).bind(user_club).fetch_all(pool).await.map_err(|e| e.to_string())?;
 
     let today: chrono::NaiveDate = sqlx::query_as::<_, (String,)>("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string()).and_then(|(d,)| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").map_err(|e| e.to_string()))?;
 
     let mut out = Vec::new();
-    for (id, name, nation, flag_path, pos, ca, pa, club_id, club_name, club_short, wage, end) in rows {
+    for (id, name, nation, flag_path, second_flag_path, pos, ca, pa, club_id, club_name, club_short, wage, end) in rows {
         let dob: String = sqlx::query_as::<_, (String,)>("SELECT date_of_birth FROM players WHERE id=?").bind(id).fetch_one(pool).await.map_err(|e| e.to_string())?.0;
         let age = chrono::NaiveDate::parse_from_str(&dob, "%Y-%m-%d").map(|d| ((today - d).num_days()/365) as i64).unwrap_or(25);
         let end_date = chrono::NaiveDate::parse_from_str(&end, "%Y-%m-%d").unwrap_or(today);
         let years = ((end_date - today).num_days() as f64 / 365.0).ceil() as i64;
         let value = calculate_player_value(ca, pa, age, years.max(0));
         let knowledge: i64 = sqlx::query_as("SELECT COALESCE(knowledge_percentage,0) FROM player_knowledge WHERE club_id=? AND player_id=?").bind(user_club).bind(id).fetch_optional(pool).await.map_err(|e| e.to_string())?.map(|(k,): (i64,)| k).unwrap_or(0);
-        if rand::random::<f64>() < 0.5 {
+        if knowledge >= 20 || rand::random::<f64>() < 0.5 {
             let (display_ca, display_pa) = if knowledge >= 80 { (ca, pa) } else if knowledge >= 50 { ((ca / 10) * 10, (pa / 10) * 10) } else { (0, 0) };
-            out.push(MarketPlayer { id, name, age, nation:nation.clone(), position: pos, secondary_position: None, flag_path, second_flag_path: None, ca: display_ca, pa: display_pa, club_id, club_name, club_short, value: if knowledge >= 50 { value } else { 0.0 }, wage, contract_end: end, knowledge });
+            out.push(MarketPlayer { id, name, age, nation:nation.clone(), position: pos, secondary_position: None, flag_path, second_flag_path, ca: display_ca, pa: display_pa, club_id, club_name, club_short, value: if knowledge >= 50 { value } else { 0.0 }, wage, contract_end: end, knowledge });
         }
         if out.len() >= 20 { break; }
     }

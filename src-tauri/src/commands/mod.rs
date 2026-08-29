@@ -13,6 +13,11 @@ pub mod training_cmd;
 pub mod youth_cmd;
 pub mod transfer_cmd;
 
+pub async fn free_staff_for_nation(pool: &SqlitePool, nation_id: i64) -> Result<Vec<(i64, String, String, i64, i64)>, String> {
+  sqlx::query_as("SELECT id, common_name, role, COALESCE(tactical,0), COALESCE(motivating,0) FROM staff WHERE club_id IS NULL AND nation_id=? ORDER BY judging DESC, id LIMIT 50")
+    .bind(nation_id).fetch_all(pool).await.map_err(|e| e.to_string())
+}
+
 use std::sync::Mutex;
 use serde::Serialize;
 use sqlx::SqlitePool;
