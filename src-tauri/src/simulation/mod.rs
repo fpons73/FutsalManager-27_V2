@@ -12,6 +12,8 @@ pub struct AdvanceResult {
 
 pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     let _ = crate::commands::national_cmd::generate_international_windows(pool).await;
+    let _ = crate::commands::national_cmd::ensure_national_tournament_entries(pool).await;
+    let _ = crate::commands::national_cmd::generate_national_tournament_matches(pool).await;
     let (cur_date,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1")
         .fetch_one(pool).await.map_err(|e| e.to_string())?;
 
@@ -20,6 +22,19 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     let matches: Vec<(i64, i64, i64, i64)> =
         sqlx::query_as("SELECT id, home_club_id, away_club_id, competition_id FROM matches WHERE date=? AND status='scheduled'")
             .bind(&cur_date).fetch_all(pool).await.map_err(|e| e.to_string())?;
+
+    let international_matches: Vec<(i64,i64,i64,i64)> = sqlx::query_as("SELECT id,home_nation_id,away_nation_id,COALESCE(competition_id,0) FROM international_matches WHERE date=? AND status='scheduled'").bind(&cur_date).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (id, home, away, _competition_id) in international_matches {
+        let home_level: (i64,) = sqlx::query_as("SELECT futsal_level FROM nations WHERE id=?").bind(home).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let away_level: (i64,) = sqlx::query_as("SELECT futsal_level FROM nations WHERE id=?").bind(away).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let home_goals = ((home_level.0 as f64 / 35.0) + rand::random::<f64>() * 3.0).round() as i64;
+        let away_goals = ((away_level.0 as f64 / 35.0) + rand::random::<f64>() * 3.0).round() as i64;
+        sqlx::query("UPDATE international_matches SET status='finished',home_score=?,away_score=? WHERE id=?").bind(home_goals).bind(away_goals).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE national_tournament_entries SET played=played+1,won=won+?,drawn=drawn+?,lost=lost+?,goals_for=goals_for+?,goals_against=goals_against+?,points=points+? WHERE competition_id=(SELECT competition_id FROM international_matches WHERE id=?) AND season=(SELECT season FROM international_matches WHERE id=?) AND nation_id=?")
+            .bind((home_goals>away_goals) as i64).bind((home_goals==away_goals) as i64).bind((home_goals<away_goals) as i64).bind(home_goals).bind(away_goals).bind(if home_goals>away_goals{3}else if home_goals==away_goals{1}else{0}).bind(id).bind(id).bind(home).execute(pool).await.ok();
+        sqlx::query("UPDATE national_tournament_entries SET played=played+1,won=won+?,drawn=drawn+?,lost=lost+?,goals_for=goals_for+?,goals_against=goals_against+?,points=points+? WHERE competition_id=(SELECT competition_id FROM international_matches WHERE id=?) AND season=(SELECT season FROM international_matches WHERE id=?) AND nation_id=?")
+            .bind((away_goals>home_goals) as i64).bind((home_goals==away_goals) as i64).bind((away_goals<home_goals) as i64).bind(away_goals).bind(home_goals).bind(if away_goals>home_goals{3}else if home_goals==away_goals{1}else{0}).bind(id).bind(id).bind(away).execute(pool).await.ok();
+    }
 
     let mut results = Vec::new();
     for (mid, hid, aid, comp_id) in matches.iter().copied() {

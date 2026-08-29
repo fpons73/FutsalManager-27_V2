@@ -40,6 +40,7 @@ pub fn run() {
       commands::national_cmd::get_free_national_staff,
       commands::national_cmd::assign_national_manager,
       commands::national_cmd::get_international_fixtures,
+      commands::national_cmd::get_national_standings,
       commands::match_live::start_live_match,
       commands::match_live::tick_live,
       commands::match_live::get_live_snapshot,

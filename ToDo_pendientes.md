@@ -39,6 +39,8 @@
 - [ ] Ventanas internacionales.
 - [ ] Clasificaciones y fases de clasificación.
 - [ ] Mundial, torneos continentales y competiciones internacionales.
+- [x] Modelo inicial de clasificaciones internacionales y migración de participantes.
+- [x] Simulación diaria de partidos internacionales y actualización de puntos/estadísticas.
 - [ ] Partidos de selecciones integrados en el calendario.
 
 > Incidencias corregidas en el último hito: encabezado duplicado, alias SQL del calendario, decodificación REAL del mercado y banderas comunes del Editor/Ojeo/Mercado.
