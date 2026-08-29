@@ -29,7 +29,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Cantera U12-U20 gestionable, promociones y desarrollo juvenil.
 - Copas nacionales, supercopas, grupos, eliminatorias y playoffs; las fases de grupos ya tienen persistencia, clasificación, actualización de resultados y cruces iniciales de clasificados.
 - Ascensos y descensos entre divisiones, con reglas configurables e historial de movimientos.
-- Sistema de selecciones nacionales con convocatorias, ventanas, grupos, simulación diaria y clasificación internacional inicial; eliminatorias y palmarés persistente en curso.
+- Sistema de selecciones nacionales con convocatorias, ventanas, grupos, simulación diaria, eliminatorias y palmarés persistente; formatos continentales avanzados pendientes.
 - Moral, felicidad, química, roles, capitanes, compatibilidad, promesas y conversaciones con jugadores.
 - Contratos avanzados, renovaciones, cláusulas, bonus, cesiones y jugadores libres.
 - Gestión funcional del staff y efecto de sus atributos.

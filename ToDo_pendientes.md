@@ -38,7 +38,7 @@
 - [x] Torneos internacionales completos y clasificación inicial con grupos, cruces y palmarés persistente.
 - [ ] Ventanas internacionales.
 - [ ] Clasificaciones y fases de clasificación.
-- [ ] Mundial, torneos continentales y competiciones internacionales.
+- [x] Mundial y torneos internacionales base con grupos, semifinales, final y campeón persistente; formatos continentales avanzados pendientes.
 - [x] Modelo inicial de clasificaciones internacionales y migración de participantes.
 - [x] Simulación diaria de partidos internacionales y actualización de puntos/estadísticas.
 - [x] Partidos de selecciones integrados en el calendario.
