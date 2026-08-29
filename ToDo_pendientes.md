@@ -24,7 +24,7 @@
 - [x] Fases de grupos: grupos, inscripciones, calendario round-robin, clasificación específica, actualización de resultados y generación inicial de cruces de clasificados validada con tests.
 - [x] Estructura de eliminatorias a doble partido y marcador global inicial, configurable desde el Editor.
 - [ ] Desempates por enfrentamiento directo.
-- [ ] Reglas específicas de clasificación por competición.
+- [x] Reglas específicas de clasificación por competición: criterios configurables de desempate iniciales.
 - [ ] Calendarios que eviten solapamientos y saturación de partidos.
 - [ ] Prórroga y penaltis plenamente integrados en todos los flujos.
 

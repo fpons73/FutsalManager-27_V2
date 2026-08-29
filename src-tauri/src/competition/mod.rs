@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use sqlx::SqlitePool;
+pub mod rules;
 
 pub fn build_round_robin(team_ids: &[i64]) -> Vec<Vec<(i64, i64)>> {
     let n = team_ids.len();

@@ -189,11 +189,10 @@ async fn update_standings(pool: &SqlitePool, comp_id: i64, hid: i64, aid: i64, h
 }
 
 async fn recompute_positions(pool: &SqlitePool) -> Result<(), String> {
-    let comps: Vec<(i64,)> = sqlx::query_as("SELECT id FROM competitions").fetch_all(pool).await.map_err(|e| e.to_string())?;
-    for (cid,) in comps {
-        let rows: Vec<(i64, i64, i64, i64)> = sqlx::query_as(
-            "SELECT club_id, points, goal_difference, goals_for FROM league_standings WHERE competition_id=? ORDER BY points DESC, goal_difference DESC, goals_for DESC, club_id ASC"
-        ).bind(cid).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let comps: Vec<(i64, String)> = sqlx::query_as("SELECT id, tiebreak_rule FROM competitions").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (cid, rule) in comps {
+        let order = crate::competition::rules::order_clause(&rule);
+        let rows: Vec<(i64, i64, i64, i64)> = sqlx::query_as(&format!("SELECT club_id, points, goal_difference, goals_for FROM league_standings WHERE competition_id={} ORDER BY {}", cid, order)).fetch_all(pool).await.map_err(|e| e.to_string())?;
         for (pos, (club_id, _, _, _)) in rows.iter().enumerate() {
             sqlx::query("UPDATE league_standings SET position=? WHERE competition_id=? AND club_id=?")
                 .bind((pos + 1) as i64).bind(cid).bind(club_id)
