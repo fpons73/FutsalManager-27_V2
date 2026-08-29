@@ -93,6 +93,7 @@
 - [x] Generación inicial de eliminatorias de copa y vínculos partido/club.
 - [x] Generación automática de calendarios de liga al crear el mundo.
 - [x] Verificar que el calendario se puede simular desde la primera jornada.
+- [x] Persistir posesión y estadísticas al simular jornadas automáticamente.
 - [x] API y calendario distinguen jornadas de liga y rondas de copa.
 - [x] Resultados de copa registran el club ganador de cada eliminatoria.
 - [x] Avance automático de ganadores a la siguiente ronda.

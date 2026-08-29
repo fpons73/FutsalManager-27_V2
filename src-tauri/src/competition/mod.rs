@@ -92,7 +92,7 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
 
     for (comp_id, season) in comps {
         let season_year: i32 = season.split('/').next().and_then(|s| s.parse().ok()).unwrap_or(2026);
-        let start = NaiveDate::from_ymd_opt(season_year, 8, 22).unwrap_or(NaiveDate::from_ymd_opt(2026, 8, 22).unwrap());
+        let start = NaiveDate::from_ymd_opt(season_year, 7, 18).unwrap_or(NaiveDate::from_ymd_opt(2026, 7, 18).unwrap());
         let mut club_rows: Vec<(i64,)> =
             sqlx::query_as("SELECT club_id FROM league_standings WHERE competition_id=? AND season=? ORDER BY club_id")
                 .bind(comp_id).bind(&season).fetch_all(pool).await.map_err(|e| e.to_string())?;
@@ -110,6 +110,8 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
         if team_ids.len() < 2 { continue; }
 
         for (idx, round) in rounds.iter().enumerate() {
+            // El juego comienza en julio; desplazar el calendario a la fecha inicial
+            // evita que la primera jornada quede en agosto antes de poder avanzar.
             let date = start + chrono::Duration::days(idx as i64 * 7);
             let date_s = date.format("%Y-%m-%d").to_string();
             let round_no = (idx + 1) as i64;
@@ -159,6 +161,16 @@ mod tests {
         let (distinct_rounds,): (i64,) = sqlx::query_as("SELECT COUNT(DISTINCT round) FROM matches WHERE competition_id=(SELECT id FROM competitions WHERE name='Primera División de Fútbol Sala')")
             .fetch_one(&pool).await.unwrap();
         assert_eq!(distinct_rounds, 30);
+    }
+
+    #[tokio::test]
+    async fn first_scheduled_jornada_is_simulable() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (date,): (String,) = sqlx::query_as("SELECT MIN(date) FROM matches WHERE competition_id=(SELECT id FROM competitions WHERE name='Primera División de Fútbol Sala')").fetch_one(&pool).await.unwrap();
+        assert!(!date.is_empty());
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE date=? AND status='scheduled'").bind(&date).fetch_one(&pool).await.unwrap();
+        assert!(count > 0, "la primera jornada debe tener partidos programados");
     }
 
     #[test]
