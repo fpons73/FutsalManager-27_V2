@@ -66,6 +66,8 @@ pub async fn ensure_default_schedule(pool: &SqlitePool, club_id: i64) -> Result<
 }
 
 pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Vec<String>, String> {
+    // La cohesión crece con una semana completada; la química se aproxima a la media moral.
+    sqlx::query("UPDATE club_dynamics SET cohesion=MIN(100, cohesion+1), chemistry=MIN(100, MAX(0, chemistry + CASE WHEN (SELECT AVG(morale) FROM player_states ps JOIN contracts c ON c.player_id=ps.player_id WHERE c.club_id=? AND c.is_active=1) > chemistry THEN 1 ELSE -1 END), updated_at=CURRENT_TIMESTAMP WHERE club_id=?").bind(club_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
     ensure_default_schedule(pool, club_id).await?;
     let schedule = get_schedule(pool, club_id).await?;
     if schedule.is_empty() { return Ok(vec![]); }

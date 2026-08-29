@@ -86,6 +86,7 @@
 - [x] Staff con efectos reales en entrenamiento, cantera, scouting y riesgo de lesiones.
 - [x] Resumen visual de impacto del staff en Entrenamientos y Cantera.
 - [x] Automatismos tácticos entrenables y configurables, aplicados contextualmente en simulación.
+- [x] Dinámica de vestuario: moral, felicidad, química, cohesión, roles y capitanes.
 - [x] Prueba de regresión para activación táctica en tramo final.
 - [ ] Moral, química y roles.
 

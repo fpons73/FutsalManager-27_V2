@@ -189,6 +189,15 @@ pub async fn editor_delete_staff(state: State<'_, AppState>, id: i64) -> Result<
     crate::editor::delete_staff(&pool, id).await
 }
 #[tauri::command]
+pub async fn editor_set_captain(state: State<'_, AppState>, club_id:i64, player_id:Option<i64>, vice:bool) -> Result<(),String> {
+    let pool = state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida")?;
+    let column = if vice { "vice_captain_player_id" } else { "captain_player_id" };
+    let query = format!("UPDATE club_leadership SET {}=? WHERE club_id=?", column);
+    sqlx::query(&query).bind(player_id).bind(club_id).execute(&pool).await.map_err(|e|e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn editor_set_coach(state: State<'_, AppState>, club_id: i64, staff_id: Option<i64>) -> Result<(), String> {
     let pool = state.pool.lock().map_err(|e| e.to_string())?.clone().ok_or("No hay partida")?;
     crate::editor::set_coach(&pool, club_id, staff_id).await

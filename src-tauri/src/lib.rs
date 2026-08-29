@@ -112,6 +112,7 @@ pub fn run() {
       commands::editor_cmd::editor_update_staff,
       commands::editor_cmd::editor_delete_staff,
       commands::editor_cmd::editor_set_coach,
+      commands::editor_cmd::editor_set_captain,
       commands::editor_cmd::editor_set_crest,
       commands::editor_cmd::editor_list_confederations_full,
       commands::editor_cmd::editor_update_confederation,

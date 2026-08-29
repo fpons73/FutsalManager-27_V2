@@ -68,6 +68,11 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             crate::competition::generate_calendars(pool).await?;
         }
 
+        for (club_id, won) in [(hid, home_goals > away_goals), (aid, away_goals > home_goals)] {
+            let delta = if won { 1 } else if home_goals == away_goals { 0 } else { -1 };
+            sqlx::query("UPDATE player_states SET morale=MIN(100,MAX(0,morale+?)), happiness=MIN(100,MAX(0,happiness+?)) WHERE player_id IN (SELECT player_id FROM contracts WHERE club_id=? AND is_active=1)").bind(delta).bind(delta).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
+        }
+
         let home_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(hid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let away_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(aid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         results.push(format!("{} {}-{} {}", home_name.0, home_goals, away_goals, away_name.0));

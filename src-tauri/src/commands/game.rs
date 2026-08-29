@@ -102,6 +102,9 @@ pub struct PlayerRow {
     pub wage: f64,
     pub condition: i64,
     pub morale: i64,
+    pub happiness: i64,
+    pub squad_role: String,
+    pub chemistry: i64,
     pub attrs: PlayerAttrsRow,
 }
 
@@ -245,6 +248,9 @@ struct SquadRaw {
     wage: f64,
     condition: i64,
     morale: i64,
+    happiness: i64,
+    squad_role: String,
+    chemistry: i64,
     passing: i64,
     finishing: i64,
     dribbling: i64,
@@ -264,11 +270,11 @@ struct SquadRaw {
 pub async fn get_squad(state: State<'_, AppState>, club_id: i64) -> Result<Vec<PlayerRow>, String> {
     let pool = get_pool(&state).await?;
     let mut rows = sqlx::query_as::<_, SquadRaw>(
-        "SELECT p.id as id, p.first_name as first_name, p.last_name as last_name, p.common_name as common_name, p.date_of_birth as date_of_birth, n.name as nation, n.flag_path as flag_path, n2.flag_path as second_flag_path, p.secondary_position as secondary_position, COALESCE(pp2.pos, 'UNI') as position, ps.current_ability as ca, ps.potential_ability as pa, c.wage_weekly as wage, ps.condition_val as condition, ps.morale as morale, pa.passing as passing, pa.finishing as finishing, pa.dribbling as dribbling, pa.tackling as tackling, pa.vision as vision, pa.anticipation as anticipation, pa.positioning as positioning, pa.stamina as stamina, pa.acceleration as acceleration, pa.pace as pace, pa.composure as composure, pa.technique as technique, pa.reflexes as reflexes FROM players p JOIN contracts c ON c.player_id=p.id AND c.club_id=? AND c.is_active=1 JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN player_attributes pa ON pa.player_id=p.id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp2 ON pp2.player_id=p.id ORDER BY ps.current_ability DESC"
+        "SELECT p.id as id, p.first_name as first_name, p.last_name as last_name, p.common_name as common_name, p.date_of_birth as date_of_birth, n.name as nation, n.flag_path as flag_path, n2.flag_path as second_flag_path, p.secondary_position as secondary_position, COALESCE(pp2.pos, 'UNI') as position, ps.current_ability as ca, ps.potential_ability as pa, c.wage_weekly as wage, ps.condition_val as condition, ps.morale as morale, ps.happiness as happiness, COALESCE(pr.squad_role, c.contract_role, 'rotation') as squad_role, COALESCE(cd.chemistry,60) as chemistry, pa.passing as passing, pa.finishing as finishing, pa.dribbling as dribbling, pa.tackling as tackling, pa.vision as vision, pa.anticipation as anticipation, pa.positioning as positioning, pa.stamina as stamina, pa.acceleration as acceleration, pa.pace as pace, pa.composure as composure, pa.technique as technique, pa.reflexes as reflexes FROM players p JOIN contracts c ON c.player_id=p.id AND c.club_id=? AND c.is_active=1 JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN player_attributes pa ON pa.player_id=p.id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN player_roles pr ON pr.player_id=p.id LEFT JOIN club_dynamics cd ON cd.club_id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp2 ON pp2.player_id=p.id ORDER BY ps.current_ability DESC"
     ).bind(club_id).fetch_all(&pool).await.map_err(|e| e.to_string())?;
     if rows.is_empty() {
         rows = sqlx::query_as::<_, SquadRaw>(
-            "SELECT p.id as id, p.first_name as first_name, p.last_name as last_name, p.common_name as common_name, p.date_of_birth as date_of_birth, n.name as nation, n.flag_path as flag_path, n2.flag_path as second_flag_path, p.secondary_position as secondary_position, COALESCE(pp2.pos, 'UNI') as position, ps.current_ability as ca, ps.potential_ability as pa, COALESCE(c.wage_weekly,500) as wage, ps.condition_val as condition, ps.morale as morale, pa.passing as passing, pa.finishing as finishing, pa.dribbling as dribbling, pa.tackling as tackling, pa.vision as vision, pa.anticipation as anticipation, pa.positioning as positioning, pa.stamina as stamina, pa.acceleration as acceleration, pa.pace as pace, pa.composure as composure, pa.technique as technique, pa.reflexes as reflexes FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN player_attributes pa ON pa.player_id=p.id LEFT JOIN contracts c ON c.player_id=p.id AND c.is_active=1 LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp2 ON pp2.player_id=p.id WHERE p.id IN (SELECT player_id FROM contracts WHERE club_id=? LIMIT 12) ORDER BY ps.current_ability DESC"
+            "SELECT p.id as id, p.first_name as first_name, p.last_name as last_name, p.common_name as common_name, p.date_of_birth as date_of_birth, n.name as nation, n.flag_path as flag_path, n2.flag_path as second_flag_path, p.secondary_position as secondary_position, COALESCE(pp2.pos, 'UNI') as position, ps.current_ability as ca, ps.potential_ability as pa, COALESCE(c.wage_weekly,500) as wage, ps.condition_val as condition, ps.morale as morale, ps.happiness as happiness, COALESCE(pr.squad_role, c.contract_role, 'rotation') as squad_role, COALESCE(cd.chemistry,60) as chemistry, pa.passing as passing, pa.finishing as finishing, pa.dribbling as dribbling, pa.tackling as tackling, pa.vision as vision, pa.anticipation as anticipation, pa.positioning as positioning, pa.stamina as stamina, pa.acceleration as acceleration, pa.pace as pace, pa.composure as composure, pa.technique as technique, pa.reflexes as reflexes FROM players p JOIN nations n ON n.id=p.nation_id JOIN player_states ps ON ps.player_id=p.id JOIN player_attributes pa ON pa.player_id=p.id LEFT JOIN contracts c ON c.player_id=p.id AND c.is_active=1 LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN player_roles pr ON pr.player_id=p.id LEFT JOIN club_dynamics cd ON cd.club_id=c.club_id LEFT JOIN (SELECT player_id, CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END as pos FROM player_positions) pp2 ON pp2.player_id=p.id WHERE p.id IN (SELECT player_id FROM contracts WHERE club_id=? LIMIT 12) ORDER BY ps.current_ability DESC"
         ).bind(club_id).fetch_all(&pool).await.map_err(|e| e.to_string())?;
     }
 
@@ -279,7 +285,7 @@ pub async fn get_squad(state: State<'_, AppState>, club_id: i64) -> Result<Vec<P
             let dob_d = chrono::NaiveDate::parse_from_str(&r.date_of_birth, "%Y-%m-%d").unwrap_or(today);
             ((today - dob_d).num_days() / 365) as i64
         };
-        PlayerRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, age, nation: r.nation, flag_path: r.flag_path, second_flag_path: r.second_flag_path, secondary_position: r.secondary_position, position: r.position, ca: r.ca, pa: r.pa, wage: r.wage, condition: r.condition, morale: r.morale, attrs: PlayerAttrsRow { passing: r.passing, finishing: r.finishing, dribbling: r.dribbling, tackling: r.tackling, vision: r.vision, anticipation: r.anticipation, positioning: r.positioning, stamina: r.stamina, acceleration: r.acceleration, pace: r.pace, composure: r.composure, technique: r.technique, reflexes: r.reflexes } }
+        PlayerRow { id: r.id, first_name: r.first_name, last_name: r.last_name, common_name: r.common_name, age, nation: r.nation, flag_path: r.flag_path, second_flag_path: r.second_flag_path, secondary_position: r.secondary_position, position: r.position, ca: r.ca, pa: r.pa, wage: r.wage, condition: r.condition, morale: r.morale, happiness: r.happiness, squad_role: r.squad_role, chemistry: r.chemistry, attrs: PlayerAttrsRow { passing: r.passing, finishing: r.finishing, dribbling: r.dribbling, tackling: r.tackling, vision: r.vision, anticipation: r.anticipation, positioning: r.positioning, stamina: r.stamina, acceleration: r.acceleration, pace: r.pace, composure: r.composure, technique: r.technique, reflexes: r.reflexes } }
     }).collect())
 }
 

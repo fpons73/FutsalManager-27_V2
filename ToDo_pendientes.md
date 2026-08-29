@@ -4,9 +4,16 @@
 
 ## Prioridad 1 — Profundidad deportiva
 
-- [ ] Moral, felicidad, confianza y satisfacción individual.
-- [ ] Química del vestuario y compatibilidad entre jugadores.
-- [ ] Roles, jerarquía, capitanes y promesas contractuales.
+- [x] Moral y felicidad conectadas a resultados y dinámica semanal.
+- [ ] Confianza, satisfacción avanzada y promesas individuales.
+
+> Progreso actual: moral, felicidad, química, cohesión, roles base y capitanes ya están implementados y validados.
+- [x] Química y cohesión persistidas con evolución semanal.
+- [x] Modelo persistente de compatibilidad individual preparado.
+- [ ] Cálculo y evolución avanzada de compatibilidad entre jugadores.
+- [x] Roles base de plantilla persistidos desde el contrato.
+- [x] Capitanes y vicecapitanes configurables desde el Editor.
+- [ ] Jerarquía y promesas contractuales avanzadas.
 - [ ] Conversaciones con jugadores y consecuencias deportivas.
 - [ ] Automatismos tácticos avanzados por contexto y rival.
 - [ ] IA táctica reactiva de los equipos controlados por la máquina.

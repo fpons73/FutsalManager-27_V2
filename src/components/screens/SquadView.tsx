@@ -49,7 +49,7 @@ export default function SquadView() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 lg:p-6">
       <div className="flex items-end justify-between"><div><div className="text-xs font-bold uppercase tracking-[0.2em] text-fm-accent">Gestión del club</div><h2 className="mb-4 text-xl font-black">Plantilla <span className="font-normal text-fm-dim">({players.length} jugadores)</span></h2></div><StatusBadge tone="success">{players.length} jugadores activos</StatusBadge></div>
-      <div className="grid gap-3 sm:grid-cols-3"><MetricCard label="Jugadores" value={players.length} detail="Plantilla registrada" /><MetricCard label="CA medio" value={Math.round(players.reduce((s,p)=>s+p.ca,0)/players.length)} detail="Nivel actual" tone="text-fm-sky-300" /><MetricCard label="Alertas contrato" value={contracts.filter(c => c.end_date <= new Date(Date.now()+1000*60*60*24*365).toISOString().slice(0,10)).length} detail="Vencen en 12 meses" tone="text-fm-amber-300" /></div>
+      <div className="grid gap-3 sm:grid-cols-5"><MetricCard label="Jugadores" value={players.length} detail="Plantilla registrada" /><MetricCard label="CA medio" value={Math.round(players.reduce((s,p)=>s+p.ca,0)/players.length)} detail="Nivel actual" tone="text-fm-sky-300" /><MetricCard label="Química" value={`${Math.round(players.reduce((s,p)=>s+p.chemistry,0)/players.length)}%`} detail="Ambiente del vestuario" tone="text-fm-emerald-300" /><MetricCard label="Moral media" value={`${Math.round(players.reduce((s,p)=>s+p.morale,0)/players.length)}%`} detail="Estado del grupo" tone="text-fm-amber-300" /><MetricCard label="Alertas contrato" value={contracts.filter(c => c.end_date <= new Date(Date.now()+1000*60*60*24*365).toISOString().slice(0,10)).length} detail="Vencen en 12 meses" tone="text-fm-amber-300" /></div>
       <Panel className="p-4"><section className="mb-5 rounded-xl border border-fm-border bg-fm-panel p-4">
         <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">Contratos</h3><span className="text-xs text-fm-dim">{contracts.filter(c => c.end_date <= new Date(Date.now()+1000*60*60*24*365).toISOString().slice(0,10)).length} vencen en 12 meses</span></div>
         {message && <div className="mb-3 rounded bg-fm-accent/10 px-3 py-2 text-sm text-fm-accent">{message}</div>}
@@ -65,7 +65,7 @@ export default function SquadView() {
               <tr>
                 <th className="px-3 py-2 text-left">Jugador</th>
                 <th className="px-2 py-2">Pos</th>
-                <th className="px-2 py-2">Edad</th>
+                <th className="px-2 py-2">Edad</th><th className="px-2 py-2">Rol</th><th className="px-2 py-2">Moral</th>
                 <th className="px-2 py-2">Nac</th>
                 <th className="px-2 py-2">CA</th>
                 <th className="px-2 py-2">PA</th>
@@ -83,7 +83,7 @@ export default function SquadView() {
                 <tr key={p.id} className="border-t border-fm-border hover:bg-fm-panel2">
                   <td className="px-3 py-2 font-semibold"><span className="mr-2 inline-flex items-center gap-1"><img src={p.flag_path ?? undefined} alt={p.nation} title={p.nation} className="h-3 w-5 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{p.second_flag_path && <img src={p.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-3 w-5 rounded object-cover" />}</span>{p.common_name} <span className="font-normal text-fm-dim">({p.first_name} {p.last_name})</span></td>
                   <td className="px-2 py-2 text-center"><span className={`rounded px-1.5 py-0.5 text-xs font-bold ${p.position==="POR" ? "bg-amber-500/20 text-amber-400" : p.position==="PIV" ? "bg-red-500/20 text-red-400" : p.position==="CIE" ? "bg-sky-500/20 text-sky-400" : "bg-emerald-500/20 text-emerald-400"}`}>{p.position}</span></td>
-                  <td className="px-2 py-2 text-center">{p.age}</td>
+                  <td className="px-2 py-2 text-center">{p.age}</td><td className="px-2 py-2 text-center text-xs">{p.squad_role}</td><td className="px-2 py-2 text-center">{p.morale}%</td>
                   <td className="px-2 py-2 text-center text-xs"><span className="inline-flex items-center gap-1"><img src={p.flag_path ?? undefined} alt={p.nation} title={p.nation} className="h-3 w-5 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{p.nation}{p.second_flag_path && <img src={p.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-3 w-5 rounded object-cover" />}</span></td>
                   <td className="px-2 py-2 text-center font-mono font-bold">{p.ca}</td>
                   <td className="px-2 py-2 text-center font-mono text-fm-dim">{p.pa}</td>
