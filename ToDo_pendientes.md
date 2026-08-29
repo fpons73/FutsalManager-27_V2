@@ -22,7 +22,7 @@
 
 - [ ] Motor genérico de formatos configurables desde el Editor (parcial: configuración base de grupos persistida).
 - [x] Fases de grupos: grupos, inscripciones, calendario round-robin, clasificación específica, actualización de resultados y generación inicial de cruces de clasificados validada con tests.
-- [ ] Playoffs a doble partido.
+- [x] Estructura de eliminatorias a doble partido y marcador global inicial.
 - [ ] Desempates por enfrentamiento directo.
 - [ ] Reglas específicas de clasificación por competición.
 - [ ] Calendarios que eviten solapamientos y saturación de partidos.

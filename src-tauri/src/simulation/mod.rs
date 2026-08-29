@@ -53,6 +53,18 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             update_group_members(pool, group_id, hid, aid, home_goals, away_goals).await?;
         }
         if is_cup.0 != "league" {
+            let tie: Option<(i64, i64, i64, i64, i64, i64)> = sqlx::query_as("SELECT id, leg, home_club_id, away_club_id, COALESCE(aggregate_home_score,0), COALESCE(aggregate_away_score,0) FROM cup_ties WHERE match_id=?").bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?;
+            let is_two_leg = if let Some((_, _, _, _, _, _)) = tie { let (v,): (i64,) = sqlx::query_as("SELECT knockout_two_legs FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.unwrap_or((0,)); v != 0 } else { false };
+            if is_two_leg {
+                let (tie_id, leg, first_home, first_away, prior_home, prior_away) = tie.unwrap();
+                let (agg_home, agg_away) = if leg == 2 { (prior_home + away_goals, prior_away + home_goals) } else { (home_goals, away_goals) };
+                sqlx::query("UPDATE cup_ties SET aggregate_home_score=?, aggregate_away_score=? WHERE id=?").bind(agg_home).bind(agg_away).bind(tie_id).execute(pool).await.map_err(|e| e.to_string())?;
+                if leg == 2 {
+                    let winner = if agg_home > agg_away { first_home } else if agg_away > agg_home { first_away } else if rand::random::<bool>() { first_home } else { first_away };
+                    sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE id=?").bind(winner).bind(tie_id).execute(pool).await.map_err(|e| e.to_string())?;
+                    sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE competition_id=? AND season=(SELECT season FROM matches WHERE id=?) AND round=(SELECT round FROM matches WHERE id=?) AND leg=1 AND ((home_club_id=? AND away_club_id=?) OR (home_club_id=? AND away_club_id=?))").bind(winner).bind(comp_id).bind(mid).bind(mid).bind(first_home).bind(first_away).bind(first_away).bind(first_home).execute(pool).await.map_err(|e| e.to_string())?;
+                }
+            } else {
             let winner = if home_goals > away_goals { hid } else if away_goals > home_goals { aid } else {
                 // Desempate reglamentario: prórroga y, si persiste el empate, penaltis.
                 let extra_home = rand::random::<bool>();
@@ -71,6 +83,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
                 sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE match_id=?").bind(winner).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
             }
             crate::competition::generate_calendars(pool).await?;
+            }
         }
 
         for (club_id, won) in [(hid, home_goals > away_goals), (aid, away_goals > home_goals)] {

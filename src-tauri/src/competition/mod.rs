@@ -60,10 +60,12 @@ async fn generate_next_cup_round(pool: &SqlitePool, comp_id: i64, season: &str) 
     let existing_next: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cup_ties WHERE competition_id=? AND season=? AND round=?").bind(comp_id).bind(season).bind(next_round).fetch_one(pool).await.map_err(|e| e.to_string())?;
     if existing_next.0 > 0 { return Ok(()); }
     let start = NaiveDate::from_ymd_opt(season.split('/').next().and_then(|s| s.parse().ok()).unwrap_or(2026), 9, 1).unwrap();
+    let (two_legs,): (i64,) = sqlx::query_as("SELECT knockout_two_legs FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.unwrap_or((0,));
     for (idx, pair) in winners.chunks(2).enumerate() {
         let date = (start + chrono::Duration::days((next_round * 7 + idx as i64) * 7)).format("%Y-%m-%d").to_string();
         let (mid,): (i64,) = sqlx::query_as("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,stadium_id,status) VALUES(?,?,?,?,?,?,(SELECT stadium_id FROM clubs WHERE id=?),'scheduled') RETURNING id").bind(comp_id).bind(season).bind(next_round).bind(&date).bind(pair[0].0).bind(pair[1].0).bind(pair[0].0).fetch_one(pool).await.map_err(|e| e.to_string())?;
         sqlx::query("INSERT INTO cup_ties(competition_id,season,round,leg,home_club_id,away_club_id,match_id) VALUES(?,?,?,1,?,?,?)").bind(comp_id).bind(season).bind(next_round).bind(pair[0].0).bind(pair[1].0).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
+        if two_legs != 0 { let return_date = (start + chrono::Duration::days((next_round * 7 + idx as i64) * 7 + 3)).format("%Y-%m-%d").to_string(); let (return_id,): (i64,) = sqlx::query_as("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,stadium_id,status) VALUES(?,?,?,?,?,?,(SELECT stadium_id FROM clubs WHERE id=?),'scheduled') RETURNING id").bind(comp_id).bind(season).bind(next_round).bind(&return_date).bind(pair[1].0).bind(pair[0].0).bind(pair[1].0).fetch_one(pool).await.map_err(|e| e.to_string())?; sqlx::query("INSERT INTO cup_ties(competition_id,season,round,leg,home_club_id,away_club_id,match_id) VALUES(?,?,?,2,?,?,?)").bind(comp_id).bind(season).bind(next_round).bind(pair[1].0).bind(pair[0].0).bind(return_id).execute(pool).await.map_err(|e| e.to_string())?; }
     }
     Ok(())
 }

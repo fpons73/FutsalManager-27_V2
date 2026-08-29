@@ -1,0 +1,3 @@
+ALTER TABLE competitions ADD COLUMN knockout_two_legs INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE cup_ties ADD COLUMN aggregate_home_score INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE cup_ties ADD COLUMN aggregate_away_score INTEGER NOT NULL DEFAULT 0;
