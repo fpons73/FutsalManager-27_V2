@@ -10,6 +10,7 @@ mod training;
 mod transfer;
 mod world;
 mod youth;
+mod news;
 
 use commands::AppState;
 

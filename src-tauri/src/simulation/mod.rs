@@ -39,6 +39,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     }
 
     let mut results = Vec::new();
+    let user_club: Option<(i64,)> = sqlx::query_as("SELECT user_club_id FROM game_state WHERE id=1").fetch_optional(pool).await.map_err(|e| e.to_string())?;
     for (mid, hid, aid, comp_id) in matches.iter().copied() {
         let snap = crate::engine::simulate_clubs(pool, hid, aid).await?;
         let home_goals = snap.score[0] as i64;
@@ -113,7 +114,9 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
 
         let home_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(hid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let away_name: (String,) = sqlx::query_as("SELECT short_name FROM clubs WHERE id=?").bind(aid).fetch_one(pool).await.map_err(|e| e.to_string())?;
-        results.push(format!("{} {}-{} {}", home_name.0, home_goals, away_goals, away_name.0));
+        let summary = format!("{} {}-{} {}", home_name.0, home_goals, away_goals, away_name.0);
+        if let Some((club,)) = user_club { if club == hid || club == aid { let _ = sqlx::query("INSERT OR IGNORE INTO world_news(club_id,news_type,headline,body,date,importance) VALUES(?,?,?,?,?,?)").bind(club).bind("match_result").bind(format!("Resultado: {}", summary)).bind(format!("El partido de {} ha terminado con marcador {}-{}.", if club == hid { &home_name.0 } else { &away_name.0 }, home_goals, away_goals)).bind(&cur_date).bind(if club == hid && home_goals > away_goals || club == aid && away_goals > home_goals { 1 } else { 0 }).execute(pool).await; } }
+        results.push(summary);
     }
 
     // Ticket income for home clubs

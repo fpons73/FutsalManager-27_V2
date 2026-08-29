@@ -24,7 +24,11 @@ pub async fn get_inbox(state: State<'_, AppState>) -> Result<Vec<InboxRow>, Stri
     let rows: Vec<(i64, String, String, String, String, i64, i64)> = sqlx::query_as(
         "SELECT id, sender_type, subject, body, date_sent, is_read, is_important FROM inbox_messages WHERE club_id=? ORDER BY date_sent DESC, id DESC LIMIT 50"
     ).bind(uc).fetch_all(&pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|(id, sender, subject, body, date, is_read, is_important)| InboxRow { id, sender, subject, body, date, is_read, is_important }).collect())
+    let mut out: Vec<InboxRow> = rows.into_iter().map(|(id, sender, subject, body, date, is_read, is_important)| InboxRow { id, sender, subject, body, date, is_read, is_important }).collect();
+    let news: Vec<(i64,String,String,String,i64,i64)> = sqlx::query_as("SELECT id,news_type,headline,body,importance,is_read FROM world_news WHERE club_id=? ORDER BY date DESC,id DESC LIMIT 50").bind(uc).fetch_all(&pool).await.map_err(|e| e.to_string())?;
+    out.extend(news.into_iter().map(|(id,news_type,headline,body,importance,is_read)| InboxRow { id: -id, sender: news_type, subject: headline, body, date: String::new(), is_read, is_important: importance }));
+    out.truncate(50);
+    Ok(out)
 }
 
 #[tauri::command]

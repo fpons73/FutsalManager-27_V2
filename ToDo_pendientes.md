@@ -62,7 +62,7 @@
 
 ## Prioridad 5 — Inmersión y dirección
 
-- [ ] Noticias generadas por eventos del mundo.
+- [x] Noticias generadas por resultados y eventos relevantes del mundo.
 - [ ] Rumores, medios y reputación pública.
 - [ ] Ruedas de prensa y respuestas del entrenador.
 - [x] Objetivos de directiva y seguimiento inicial por temporada.
