@@ -1,5 +1,7 @@
 # FUTSAL MANAGER 27 — ToDo de actuación
 
+> El seguimiento de pendientes reales y priorizados continúa en `ToDo_pendientes.md`. Este archivo conserva el histórico de hitos completados.
+
 > Registro vivo de implementación. Actualizar al completar cada hito.
 
 ## Hito A — Base y seguimiento

@@ -1,5 +1,9 @@
 # FUTSAL MANAGER 27 — Plan de actuación
 
+## Seguimiento actual
+
+La lista consolidada de trabajo pendiente se mantiene en `ToDo_pendientes.md`; este documento conserva el roadmap general y los criterios de actuación.
+
 ## Objetivo
 
 Convertir el prototipo jugable actual en un manager de futsal profundo, coherente y distribuible, conectando simulación, gestión, competición, economía e interfaz.
