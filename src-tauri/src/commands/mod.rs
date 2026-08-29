@@ -7,6 +7,7 @@ pub mod match_live;
 pub mod season_cmd;
 pub mod scouting_cmd;
 pub mod save_cmd;
+pub mod squad_cmd;
 pub mod training_cmd;
 pub mod youth_cmd;
 pub mod transfer_cmd;

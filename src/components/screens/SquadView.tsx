@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type ContractRow, type PlayerRow } from "../../api";
+import { api, type ContractRow, type DialogueRow, type PlayerRow, type PromiseRow, type SquadDynamics } from "../../api";
 import { useStore } from "../../store";
 import { EmptyState, MetricCard, Panel, StatusBadge } from "../ui";
 
@@ -18,12 +18,20 @@ export default function SquadView() {
   const [signingBonus, setSigningBonus] = useState(0);
   const [appearanceBonus, setAppearanceBonus] = useState(0);
   const [cleanSheetBonus, setCleanSheetBonus] = useState(0);
+  const [dynamics, setDynamics] = useState<SquadDynamics | null>(null);
+  const [promises, setPromises] = useState<PromiseRow[]>([]);
+  const [dialogues, setDialogues] = useState<DialogueRow[]>([]);
+  const [dialoguePlayer, setDialoguePlayer] = useState<number | null>(null);
+  const [dialogueResponse, setDialogueResponse] = useState("support");
 
   useEffect(() => {
     if (!userClubId) { setLoading(false); setError("No hay club seleccionado"); return; }
     setLoading(true);
     setError(null);
     api.getContracts(userClubId).then(setContracts).catch(()=>{});
+    api.getSquadDynamics().then(setDynamics).catch(()=>{});
+    api.getPlayerPromises().then(setPromises).catch(()=>{});
+    api.getPlayerDialogues().then(setDialogues).catch(()=>{});
     api.getSquad(userClubId).then((p)=>{
       setPlayers(p);
       if (p.length===0) setError(`Club ${userClubId} (${clubs.find(c=>c.id===userClubId)?.name ?? "?"}) sin jugadores — verifica DB`);
@@ -58,6 +66,11 @@ export default function SquadView() {
         </div>
         {selected && <div className="mt-3 rounded-lg bg-fm-bg p-3 text-sm"><div className="mb-3 font-semibold">Propuesta para {selected.player_name}</div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-xs text-fm-dim">Años<select value={years} onChange={e=>setYears(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white"><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option></select></label><label className="text-xs text-fm-dim">Salario semanal<input type="number" min={1} value={wage} onChange={e=>setWage(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white" /></label><label className="text-xs text-fm-dim">Rol<select value={role} onChange={e=>setRole(e.target.value)} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white"><option value="star">Estrella</option><option value="first_team">Titular</option><option value="rotation">Rotación</option><option value="backup">Suplente</option></select></label><label className="text-xs text-fm-dim">Cláusula<input type="number" min={0} value={clause} onChange={e=>setClause(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white" /></label><label className="text-xs text-fm-dim">Prima fichaje<input type="number" min={0} value={signingBonus} onChange={e=>setSigningBonus(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white" /></label><label className="text-xs text-fm-dim">Bonus aparición<input type="number" min={0} value={appearanceBonus} onChange={e=>setAppearanceBonus(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white" /></label><label className="text-xs text-fm-dim">Bonus portería<input type="number" min={0} value={cleanSheetBonus} onChange={e=>setCleanSheetBonus(Number(e.target.value))} className="mt-1 w-full rounded border border-fm-border bg-fm-panel px-2 py-1 text-white" /></label></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-fm-dim">Coste semanal: €{Math.round(wage).toLocaleString()} · Variación: {Math.round(wage-selected.wage)>=0?'+':''}€{Math.round(wage-selected.wage).toLocaleString()}</span><button onClick={renew} disabled={wage<=0} className="rounded bg-fm-accent px-3 py-1.5 font-bold text-black disabled:cursor-not-allowed disabled:opacity-50">Enviar renovación</button></div></div>}
       </section></Panel>
+      <Panel className="grid gap-4 p-4 lg:grid-cols-3">
+        <div><h3 className="font-bold">Vestuario</h3><p className="mt-2 text-sm text-fm-dim">Química <b className="text-fm-emerald-300">{dynamics?.chemistry ?? "—"}%</b> · Cohesión <b className="text-fm-sky-300">{dynamics?.cohesion ?? "—"}%</b></p><p className="mt-2 text-xs text-fm-dim">Capitán: {players.find(p=>p.id===dynamics?.captain_id)?.common_name ?? "Sin asignar"}<br/>Vicecapitán: {players.find(p=>p.id===dynamics?.vice_captain_id)?.common_name ?? "Sin asignar"}</p></div>
+        <div><h3 className="font-bold">Conversar</h3><p className="mt-1 text-[11px] text-fm-dim">{dialogues.length ? `Última conversación: ${dialogues[0].response} (${dialogues[0].morale_delta > 0 ? "+" : ""}${dialogues[0].morale_delta})` : "Sin conversaciones recientes"}</p><div className="mt-2 flex gap-2"><select value={dialoguePlayer ?? ""} onChange={e=>setDialoguePlayer(Number(e.target.value))} className="min-w-0 flex-1 rounded border border-fm-border bg-fm-panel px-2 py-1 text-xs"><option value="">Jugador…</option>{players.map(p=><option key={p.id} value={p.id}>{p.common_name}</option>)}</select><select value={dialogueResponse} onChange={e=>setDialogueResponse(e.target.value)} className="rounded border border-fm-border bg-fm-panel px-2 py-1 text-xs"><option value="support">Apoyar</option><option value="demand">Exigir</option><option value="neutral">Escuchar</option></select></div><button disabled={!dialoguePlayer} onClick={async()=>{if(!dialoguePlayer)return; await api.talkToPlayer(dialoguePlayer,"squad_status",dialogueResponse); setDialogues(await api.getPlayerDialogues()); setPlayers(userClubId ? await api.getSquad(userClubId) : players);}} className="mt-2 rounded bg-fm-accent px-3 py-1 text-xs font-bold text-black disabled:opacity-50">Registrar conversación</button></div>
+        <div><h3 className="font-bold">Promesas activas</h3>{promises.length ? <ul className="mt-2 space-y-1 text-xs text-fm-dim">{promises.slice(0,4).map(p=><li key={p.id}>Jugador #{p.player_id} · {p.promise_type} · objetivo {p.target_value} · <span className="text-fm-amber-300">{p.status}</span></li>)}</ul> : <p className="mt-2 text-xs text-fm-dim">No hay promesas registradas.</p>}</div>
+      </Panel>
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

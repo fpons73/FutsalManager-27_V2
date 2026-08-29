@@ -88,7 +88,7 @@
 - [x] Automatismos tácticos entrenables y configurables, aplicados contextualmente en simulación.
 - [x] Dinámica de vestuario: moral, felicidad, química, cohesión, roles y capitanes.
 - [x] Prueba de regresión para activación táctica en tramo final.
-- [ ] Moral, química y roles.
+- [x] Moral, química, roles, compatibilidad, jerarquía, promesas y conversaciones iniciales.
 
 ## Hito H — Competiciones y carrera larga
 
@@ -183,6 +183,7 @@
 - [x] `cargo test --manifest-path src-tauri/Cargo.toml` — 12 tests correctos.
 - [x] Build verificado tras añadir módulo y pantalla de scouting.
 - [x] Build y tests verificados tras añadir contratos avanzados.
+- [x] Dinámica de vestuario ampliada y validada: 14 tests Rust correctos.
 - [x] Formulario configurable de renovación con preview salarial.
 - [x] Listado y fichaje de jugadores libres desde Mercado.
 - [x] Staff ficticio generado con cuatro perfiles por club y atributos.

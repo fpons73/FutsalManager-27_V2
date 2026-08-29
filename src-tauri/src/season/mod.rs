@@ -181,6 +181,7 @@ pub async fn rollover_season(pool: &SqlitePool) -> Result<String, String> {
         }
     }
 
+    let _ = crate::competition::progress_group_competitions(pool).await?;
     crate::competition::generate_calendars(pool).await?;
 
     sqlx::query("UPDATE game_state SET season=?, game_date=? WHERE id=1").bind(&next_season).bind(new_date.format("%Y-%m-%d").to_string()).execute(pool).await.map_err(|e| e.to_string())?;

@@ -7,13 +7,17 @@ export default function StandingsView() {
   const [rows, setRows] = useState<StandingRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [group, setGroup] = useState<string>("all");
   const [kind, setKind] = useState<"clubs" | "selecciones">("clubs");
   const clubComps = competitions.filter((c)=>c.kind === "club");
   const natComps = competitions.filter((c)=>c.kind === "national_team");
   const opts = kind === "clubs" ? clubComps : natComps;
   const sel = selectedComp && opts.some((c)=>c.id===selectedComp) ? selectedComp : (opts[0]?.id ?? 1);
 
-  useEffect(() => { if (sel) { setLoading(true); setError(null); api.getStandings(sel).then(setRows).catch((e)=>{setRows([]);setError(String(e));}).finally(()=>setLoading(false)); } }, [sel, kind]);
+  useEffect(() => { if (sel) { setLoading(true); setError(null); const comp=opts.find(c=>c.id===sel); const request=comp?.group_count && comp.group_count>0 ? api.getGroupStandings(sel) : api.getStandings(sel); request.then(setRows).catch((e)=>{setRows([]);setError(String(e));}).finally(()=>setLoading(false)); } }, [sel, kind]);
+
+  const groups = [...new Set(rows.map(r=>r.group_code).filter((g): g is string => Boolean(g)))];
+  const visibleRows = group === "all" ? rows : rows.filter(r=>r.group_code===group);
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -24,6 +28,7 @@ export default function StandingsView() {
             <button onClick={()=>setKind("clubs")} className={`rounded-full px-3 py-1 text-xs font-bold ${kind==="clubs" ? "bg-fm-accent text-black" : "text-fm-dim"}`}>Clubes</button>
             <button onClick={()=>setKind("selecciones")} className={`rounded-full px-3 py-1 text-xs font-bold ${kind==="selecciones" ? "bg-fm-accent text-black" : "text-fm-dim"}`}>Selecciones</button>
           </div>
+          {groups.length > 0 && <select value={group} onChange={e=>setGroup(e.target.value)} className="rounded-lg border border-fm-border bg-fm-panel px-3 py-1.5 text-sm"><option value="all">Todos los grupos</option>{groups.map(g=><option key={g} value={g}>Grupo {g}</option>)}</select>}
           <select value={sel} onChange={(e) => setSelectedComp(Number(e.target.value))} className="rounded-lg border border-fm-border bg-fm-panel px-3 py-1.5 text-sm">
             {opts.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.nation || "Internacional"}</option>)}
           </select>
@@ -37,7 +42,7 @@ export default function StandingsView() {
             <tr><th className="px-3 py-2 text-left">#</th><th className="px-2 py-2 text-left">Club</th><th className="px-2 py-2">PJ</th><th className="px-2 py-2">G</th><th className="px-2 py-2">E</th><th className="px-2 py-2">P</th><th className="px-2 py-2">GF</th><th className="px-2 py-2">GC</th><th className="px-2 py-2">DG</th><th className="px-2 py-2">Pts</th></tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {visibleRows.map((r) => (
               <tr key={r.club_id} className={`border-t border-fm-border ${r.club_id===userClubId ? "bg-fm-accent/10 font-bold" : "hover:bg-fm-panel2"}`}>
                 <td className="px-3 py-2 font-mono">{r.position}</td>
                 <td className="px-2 py-2">{r.club_name} <span className="text-fm-dim">({r.short_name})</span></td>

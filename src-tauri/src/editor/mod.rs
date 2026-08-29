@@ -16,7 +16,7 @@ pub struct StadiumRow { pub id:i64, pub name:String, pub city:String, pub city_i
 pub struct ContractEditorRow { pub id:i64, pub player_id:i64, pub player_name:String, pub club_id:i64, pub club_name:String, pub wage_weekly:f64, pub start_date:String, pub end_date:String, pub release_clause:Option<f64>, pub role:String, pub signing_bonus:f64, pub appearance_bonus:f64, pub clean_sheet_bonus:f64, pub loan_parent_id:Option<i64>, pub loan_until:Option<String>, pub is_active:i64 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CompetitionRow { pub id: i64, pub name: String, pub nation: Option<String>, pub nation_id: Option<i64>, pub tier: Option<i64>, pub total_teams: Option<i64>, pub season: String, pub format: String, pub kind: String }
+pub struct CompetitionRow { pub id: i64, pub name: String, pub nation: Option<String>, pub nation_id: Option<i64>, pub tier: Option<i64>, pub total_teams: Option<i64>, pub season: String, pub format: String, pub kind: String, pub group_count: i64, pub teams_per_group: i64, pub group_qualifiers: i64 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct StaffRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub flag_path: Option<String>, pub role: String, pub club_id: Option<i64>, pub club_name: Option<String>, pub tactical: i64, pub man_management: i64, pub judging: i64, pub motivating: i64, pub working_youngsters: i64, pub physio_level: i64, pub wage_weekly: f64, pub photo_path: Option<String> }
 
@@ -114,10 +114,10 @@ pub async fn update_contract(pool: &SqlitePool, id:i64, club_id:i64, wage:f64, s
     Ok(())
 }
 pub async fn list_competitions(pool: &SqlitePool) -> Result<Vec<CompetitionRow>, String> {
-    let rows = sqlx::query_as::<_, (i64, String, Option<i64>, Option<String>, Option<i64>, Option<i64>, String, String, String)>(
-        "SELECT comp.id, comp.name, comp.nation_id, n.name, comp.tier, comp.total_teams, comp.season, comp.format, comp.kind FROM competitions comp LEFT JOIN nations n ON n.id=comp.nation_id ORDER BY comp.kind, comp.tier NULLS LAST, comp.name"
+    let rows = sqlx::query_as::<_, (i64, String, Option<i64>, Option<String>, Option<i64>, Option<i64>, String, String, String, i64, i64, i64)>(
+        "SELECT comp.id, comp.name, comp.nation_id, n.name, comp.tier, comp.total_teams, comp.season, comp.format, comp.kind, comp.group_count, comp.teams_per_group, comp.group_qualifiers FROM competitions comp LEFT JOIN nations n ON n.id=comp.nation_id ORDER BY comp.kind, comp.tier NULLS LAST, comp.name"
     ).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|(id, name, nation_id, nation, tier, total_teams, season, format, kind)| CompetitionRow { id, name, nation, nation_id, tier, total_teams, season, format, kind }).collect())
+    Ok(rows.into_iter().map(|(id, name, nation_id, nation, tier, total_teams, season, format, kind, group_count, teams_per_group, group_qualifiers)| CompetitionRow { id, name, nation, nation_id, tier, total_teams, season, format, kind, group_count, teams_per_group, group_qualifiers }).collect())
 }
 pub async fn list_stadiums(pool: &SqlitePool) -> Result<Vec<StadiumRow>, String> {
     let rows=sqlx::query_as::<_,(i64,String,String,Option<i64>,i64,String,Option<String>,Option<i64>,Option<String>)>("SELECT s.id,s.name,COALESCE(ci.name,'-'),s.city_id,s.capacity,s.pitch_type,s.photo_path,c.id,c.name FROM stadiums s LEFT JOIN cities ci ON ci.id=s.city_id LEFT JOIN clubs c ON c.stadium_id=s.id ORDER BY s.name").fetch_all(pool).await.map_err(|e|e.to_string())?;

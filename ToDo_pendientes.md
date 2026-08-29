@@ -5,23 +5,23 @@
 ## Prioridad 1 — Profundidad deportiva
 
 - [x] Moral y felicidad conectadas a resultados y dinámica semanal.
-- [ ] Confianza, satisfacción avanzada y promesas individuales.
+- [ ] Confianza y satisfacción avanzada; las promesas individuales ya disponen de persistencia, validación y evaluación inicial.
 
 > Progreso actual: moral, felicidad, química, cohesión, roles base y capitanes ya están implementados y validados.
 - [x] Química y cohesión persistidas con evolución semanal.
 - [x] Modelo persistente de compatibilidad individual preparado.
-- [ ] Cálculo y evolución avanzada de compatibilidad entre jugadores.
+- [x] Cálculo y evolución avanzada de compatibilidad entre jugadores.
 - [x] Roles base de plantilla persistidos desde el contrato.
 - [x] Capitanes y vicecapitanes configurables desde el Editor.
-- [ ] Jerarquía y promesas contractuales avanzadas.
-- [ ] Conversaciones con jugadores y consecuencias deportivas.
+- [x] Jerarquía automática, capitanes y promesas contractuales avanzadas.
+- [x] Conversaciones con jugadores y efectos iniciales sobre moral.
 - [ ] Automatismos tácticos avanzados por contexto y rival.
 - [ ] IA táctica reactiva de los equipos controlados por la máquina.
 
 ## Prioridad 2 — Competiciones completas
 
-- [ ] Motor genérico de formatos configurables desde el Editor.
-- [ ] Fases de grupos y liguillas.
+- [ ] Motor genérico de formatos configurables desde el Editor (parcial: configuración base de grupos persistida).
+- [x] Fases de grupos: grupos, inscripciones, calendario round-robin, clasificación específica, actualización de resultados y generación inicial de cruces de clasificados validada con tests.
 - [ ] Playoffs a doble partido.
 - [ ] Desempates por enfrentamiento directo.
 - [ ] Reglas específicas de clasificación por competición.

@@ -34,6 +34,22 @@ pub fn build_round_robin(team_ids: &[i64]) -> Vec<Vec<(i64, i64)>> {
     result
 }
 
+async fn generate_group_qualifier_round(pool: &SqlitePool, competition_id: i64, season: &str) -> Result<i64, String> {
+    let (qualifiers,): (i64,) = sqlx::query_as("SELECT group_qualifiers FROM competitions WHERE id=?").bind(competition_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if qualifiers < 1 { return Ok(0); }
+    let existing: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cup_ties WHERE competition_id=? AND season=? AND round=1000").bind(competition_id).bind(season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if existing.0 > 0 { return Ok(0); }
+    let groups: Vec<(i64,)> = sqlx::query_as("SELECT id FROM competition_groups WHERE competition_id=? AND season=? ORDER BY group_code").bind(competition_id).bind(season).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    if groups.is_empty() { return Ok(0); }
+    let mut teams = Vec::new();
+    for (gid,) in groups { let rows: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM group_members WHERE group_id=? ORDER BY position, points DESC, goals_for-goals_against DESC, goals_for DESC LIMIT ?").bind(gid).bind(qualifiers).fetch_all(pool).await.map_err(|e| e.to_string())?; teams.extend(rows); }
+    if teams.len() < 2 || teams.len() % 2 != 0 { return Ok(0); }
+    let date = NaiveDate::from_ymd_opt(season.split('/').next().and_then(|s| s.parse().ok()).unwrap_or(2026), 11, 15).unwrap();
+    let mut created = 0;
+    for pair in teams.chunks(2) { let (mid,): (i64,) = sqlx::query_as("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,stadium_id,status) VALUES(?,?,?,?,?,?,(SELECT stadium_id FROM clubs WHERE id=?),'scheduled') RETURNING id").bind(competition_id).bind(season).bind(1000_i64).bind(date.format("%Y-%m-%d").to_string()).bind(pair[0].0).bind(pair[1].0).bind(pair[0].0).fetch_one(pool).await.map_err(|e| e.to_string())?; sqlx::query("INSERT INTO cup_ties(competition_id,season,round,leg,home_club_id,away_club_id,match_id) VALUES(?,?,1000,1,?,?,?)").bind(competition_id).bind(season).bind(pair[0].0).bind(pair[1].0).bind(mid).execute(pool).await.map_err(|e| e.to_string())?; created += 1; }
+    Ok(created)
+}
+
 async fn generate_next_cup_round(pool: &SqlitePool, comp_id: i64, season: &str) -> Result<(), String> {
     let (round,): (Option<i64>,) = sqlx::query_as("SELECT MAX(round) FROM cup_ties WHERE competition_id=? AND season=?").bind(comp_id).bind(season).fetch_one(pool).await.map_err(|e| e.to_string())?;
     let next_round = round.unwrap_or(1) + 1;
@@ -53,6 +69,7 @@ async fn generate_next_cup_round(pool: &SqlitePool, comp_id: i64, season: &str) 
 }
 
 pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
+    generate_group_stages(pool).await?;
     // Las competiciones de copa se generan como eliminatorias de partido único.
     let cups: Vec<(i64,String,i64,String)> = sqlx::query_as("SELECT id,season,total_teams,name FROM competitions WHERE competition_type='cup' AND knockout_rounds>0 AND kind='club'").fetch_all(pool).await.map_err(|e|e.to_string())?;
     for (comp_id, season, _, name) in cups {
@@ -129,6 +146,42 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn progress_group_competitions(pool: &SqlitePool) -> Result<i64, String> {
+    let comps: Vec<(i64, String)> = sqlx::query_as("SELECT id, season FROM competitions WHERE group_count > 0 AND group_qualifiers > 0").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let mut created = 0;
+    for (id, season) in comps { let (pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches m JOIN competition_groups g ON g.competition_id=m.competition_id AND g.season=m.season WHERE m.competition_id=? AND m.season=? AND m.status='scheduled'").bind(id).bind(&season).fetch_one(pool).await.map_err(|e| e.to_string())?; if pending == 0 { created += generate_group_qualifier_round(pool, id, &season).await?; } }
+    Ok(created)
+}
+
+async fn generate_group_stages(pool: &SqlitePool) -> Result<(), String> {
+    let comps: Vec<(i64, String, i64, i64)> = sqlx::query_as("SELECT id, season, group_count, teams_per_group FROM competitions WHERE kind='club' AND group_count > 0 AND teams_per_group >= 2")
+        .fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (competition_id, season, group_count, teams_per_group) in comps {
+        let existing: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM competition_groups WHERE competition_id=? AND season=?").bind(competition_id).bind(&season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        if existing.0 > 0 { continue; }
+        let limit = group_count * teams_per_group;
+        let teams: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM league_standings WHERE competition_id=? AND season=? ORDER BY position, club_id LIMIT ?")
+            .bind(competition_id).bind(&season).bind(limit).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        if teams.len() < (teams_per_group * 2) as usize { continue; }
+        for group_idx in 0..group_count {
+            let code = ((b'A' + group_idx as u8) as char).to_string();
+            let (group_id,): (i64,) = sqlx::query_as("INSERT INTO competition_groups(competition_id,season,group_code) VALUES(?,?,?) RETURNING id").bind(competition_id).bind(&season).bind(&code).fetch_one(pool).await.map_err(|e| e.to_string())?;
+            for (club_id,) in teams.iter().skip((group_idx * teams_per_group) as usize).take(teams_per_group as usize) {
+                sqlx::query("INSERT INTO group_members(group_id,club_id) VALUES(?,?)").bind(group_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
+            }
+            let ids: Vec<i64> = teams.iter().skip((group_idx * teams_per_group) as usize).take(teams_per_group as usize).map(|(id,)| *id).collect();
+            for (round_idx, round) in build_round_robin(&ids).iter().enumerate() {
+                let date = NaiveDate::from_ymd_opt(season.split('/').next().and_then(|v| v.parse().ok()).unwrap_or(2026), 8, 1).unwrap() + chrono::Duration::days((round_idx as i64) * 7);
+                for (home, away) in round {
+                    sqlx::query("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,stadium_id,status) VALUES(?,?,?,?,?,?,(SELECT stadium_id FROM clubs WHERE id=?),'scheduled')")
+                        .bind(competition_id).bind(&season).bind((round_idx + 1) as i64).bind(date.format("%Y-%m-%d").to_string()).bind(home).bind(away).bind(home).execute(pool).await.map_err(|e| e.to_string())?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +224,20 @@ mod tests {
         assert!(!date.is_empty());
         let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE date=? AND status='scheduled'").bind(&date).fetch_one(&pool).await.unwrap();
         assert!(count > 0, "la primera jornada debe tener partidos programados");
+    }
+
+    #[tokio::test]
+    async fn group_qualifiers_create_knockout_round() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (comp_id,): (i64,) = sqlx::query_as("SELECT id FROM competitions WHERE competition_type='league' LIMIT 1").fetch_one(&pool).await.unwrap();
+        sqlx::query("UPDATE competitions SET group_count=2, teams_per_group=4, group_qualifiers=1 WHERE id=?").bind(comp_id).execute(&pool).await.unwrap();
+        generate_group_stages(&pool).await.unwrap();
+        sqlx::query("UPDATE group_members SET position=1, points=10 WHERE group_id IN (SELECT id FROM competition_groups WHERE competition_id=?)").bind(comp_id).execute(&pool).await.unwrap();
+        let created = generate_group_qualifier_round(&pool, comp_id, "2026/2027").await.unwrap();
+        assert_eq!(created, 1);
+        let (ties,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cup_ties WHERE competition_id=? AND round=1000").bind(comp_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(ties, 1);
     }
 
     #[test]

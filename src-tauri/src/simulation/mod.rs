@@ -47,7 +47,12 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         let is_cup: (String,) = sqlx::query_as("SELECT competition_type FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
         if is_cup.0 == "league" {
             update_standings(pool, comp_id, hid, aid, home_goals, away_goals).await?;
-        } else {
+        }
+        let group_ids: Vec<(i64,)> = sqlx::query_as("SELECT gm.group_id FROM group_members gm JOIN competition_groups cg ON cg.id=gm.group_id WHERE cg.competition_id=? AND cg.season=(SELECT season FROM game_state WHERE id=1) AND gm.club_id IN (?,?) GROUP BY gm.group_id HAVING COUNT(DISTINCT gm.club_id)=2").bind(comp_id).bind(hid).bind(aid).fetch_all(pool).await.unwrap_or_default();
+        for (group_id,) in group_ids {
+            update_group_members(pool, group_id, hid, aid, home_goals, away_goals).await?;
+        }
+        if is_cup.0 != "league" {
             let winner = if home_goals > away_goals { hid } else if away_goals > home_goals { aid } else {
                 // Desempate reglamentario: prórroga y, si persiste el empate, penaltis.
                 let extra_home = rand::random::<bool>();
@@ -131,6 +136,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     sqlx::query("UPDATE injuries SET is_active=0 WHERE is_active=1 AND expected_return_date <= ?").bind(&next_s).execute(pool).await.ok();
 
     recompute_positions(pool).await?;
+    let _ = crate::competition::progress_group_competitions(pool).await?;
 
     Ok(AdvanceResult {
         from_date: cur_date,
@@ -138,6 +144,14 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         matches_played: results.len() as i64,
         results,
     })
+}
+
+async fn update_group_members(pool: &SqlitePool, group_id: i64, hid: i64, aid: i64, hg: i64, ag: i64) -> Result<(), String> {
+    for (club_id, gf, ga, won, drawn, lost, points) in [(hid, hg, ag, (hg > ag) as i64, (hg == ag) as i64, (hg < ag) as i64, if hg > ag {3} else if hg == ag {1} else {0}), (aid, ag, hg, (ag > hg) as i64, (hg == ag) as i64, (ag < hg) as i64, if ag > hg {3} else if hg == ag {1} else {0})] {
+        sqlx::query("UPDATE group_members SET played=played+1, won=won+?, drawn=drawn+?, lost=lost+?, goals_for=goals_for+?, goals_against=goals_against+?, points=points+? WHERE group_id=? AND club_id=?").bind(won).bind(drawn).bind(lost).bind(gf).bind(ga).bind(points).bind(group_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
+    }
+    sqlx::query("UPDATE group_members SET position=(SELECT COUNT(*)+1 FROM group_members other WHERE other.group_id=group_members.group_id AND (other.points>group_members.points OR (other.points=group_members.points AND (other.goals_for-other.goals_against)>(group_members.goals_for-group_members.goals_against)))) WHERE group_id=?").bind(group_id).execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 async fn update_standings(pool: &SqlitePool, comp_id: i64, hid: i64, aid: i64, hg: i64, ag: i64) -> Result<(), String> {
