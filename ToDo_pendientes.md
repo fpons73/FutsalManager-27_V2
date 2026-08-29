@@ -25,7 +25,7 @@
 - [x] Estructura de eliminatorias a doble partido y marcador global inicial, configurable desde el Editor.
 - [ ] Desempates por enfrentamiento directo.
 - [x] Reglas específicas de clasificación por competición: criterios configurables de desempate iniciales.
-- [ ] Calendarios que eviten solapamientos y saturación de partidos.
+- [ ] Calendarios que eviten solapamientos y saturación de partidos; calendario internacional distribuido por rondas.
 - [ ] Prórroga y penaltis plenamente integrados en todos los flujos.
 
 ## Prioridad 3 — Selecciones nacionales
