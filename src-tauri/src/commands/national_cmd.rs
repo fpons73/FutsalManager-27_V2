@@ -10,6 +10,8 @@ pub struct NationalManagerRow { pub nation_id:i64, pub staff_id:i64, pub staff_n
 pub struct InternationalFixtureRow { pub id:i64, pub date:String, pub home_nation_id:i64, pub home_nation:String, pub home_flag_path:Option<String>, pub away_nation_id:i64, pub away_nation:String, pub away_flag_path:Option<String>, pub status:String, pub home_score:i64, pub away_score:i64 }
 #[derive(Serialize, sqlx::FromRow)]
 pub struct NationalStandingRow { pub competition_id:i64, pub competition_name:String, pub nation_id:i64, pub nation_name:String, pub flag_path:Option<String>, pub position:i64, pub played:i64, pub won:i64, pub drawn:i64, pub lost:i64, pub goals_for:i64, pub goals_against:i64, pub points:i64 }
+#[derive(Serialize, sqlx::FromRow)]
+pub struct NationalHonourRow { pub season:String, pub competition_id:i64, pub competition_name:String, pub nation_id:i64, pub nation_name:String, pub flag_path:Option<String>, pub honour_type:String }
 
 async fn get_pool(state: &State<'_, AppState>) -> Result<sqlx::SqlitePool, String> { state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida".into()) }
 
@@ -33,6 +35,9 @@ pub async fn get_national_standings(state: State<'_, AppState>, competition_id:i
     rows.iter_mut().enumerate().for_each(|(idx,row)| row.position=(idx+1) as i64);
     Ok(rows)
 }
+
+#[tauri::command]
+pub async fn get_national_honours(state: State<'_, AppState>, nation_id:i64)->Result<Vec<NationalHonourRow>,String>{let pool=get_pool(&state).await?;sqlx::query_as::<_,NationalHonourRow>("SELECT h.season,h.competition_id,c.name,h.nation_id,n.name,n.flag_path,h.honour_type FROM national_tournament_honours h JOIN competitions c ON c.id=h.competition_id JOIN nations n ON n.id=h.nation_id WHERE h.nation_id=? ORDER BY h.season DESC").bind(nation_id).fetch_all(&pool).await.map_err(|e|e.to_string())}
 
 #[tauri::command]
 pub async fn get_international_fixtures(state: State<'_, AppState>, nation_id:i64)->Result<Vec<InternationalFixtureRow>,String>{let pool=get_pool(&state).await?;sqlx::query_as::<_,InternationalFixtureRow>("SELECT im.id,im.date,im.home_nation_id,hn.name,hn.flag_path,im.away_nation_id,an.name,an.flag_path,im.status,im.home_score,im.away_score FROM international_matches im JOIN nations hn ON hn.id=im.home_nation_id JOIN nations an ON an.id=im.away_nation_id WHERE im.home_nation_id=? OR im.away_nation_id=? ORDER BY im.date").bind(nation_id).bind(nation_id).fetch_all(&pool).await.map_err(|e|e.to_string())}

@@ -35,13 +35,13 @@
 - [x] Seleccionadores y staff internacional inicial.
 - [x] Ventanas internacionales y generación de partidos básicos.
 - [x] Pruebas de regresión para elegibilidad, doble nacionalidad, límite de convocatoria e idempotencia.
-- [ ] Torneos internacionales completos y clasificación.
+- [x] Torneos internacionales completos y clasificación inicial con grupos, cruces y palmarés persistente.
 - [ ] Ventanas internacionales.
 - [ ] Clasificaciones y fases de clasificación.
 - [ ] Mundial, torneos continentales y competiciones internacionales.
 - [x] Modelo inicial de clasificaciones internacionales y migración de participantes.
 - [x] Simulación diaria de partidos internacionales y actualización de puntos/estadísticas.
-- [ ] Partidos de selecciones integrados en el calendario.
+- [x] Partidos de selecciones integrados en el calendario.
 
 > Incidencias corregidas en el último hito: encabezado duplicado, alias SQL del calendario, decodificación REAL del mercado y banderas comunes del Editor/Ojeo/Mercado.
 
