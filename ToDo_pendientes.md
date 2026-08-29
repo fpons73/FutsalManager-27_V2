@@ -36,8 +36,8 @@
 - [x] Ventanas internacionales y generación de partidos básicos.
 - [x] Pruebas de regresión para elegibilidad, doble nacionalidad, límite de convocatoria e idempotencia.
 - [x] Torneos internacionales completos y clasificación inicial con grupos, cruces y palmarés persistente.
-- [ ] Ventanas internacionales.
-- [ ] Clasificaciones y fases de clasificación.
+- [x] Ventanas internacionales.
+- [x] Clasificaciones y fases de clasificación iniciales.
 - [x] Mundial y torneos internacionales base con grupos, semifinales, final y campeón persistente; formatos continentales avanzados pendientes.
 - [x] Modelo inicial de clasificaciones internacionales y migración de participantes.
 - [x] Simulación diaria de partidos internacionales y actualización de puntos/estadísticas.
