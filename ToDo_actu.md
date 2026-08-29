@@ -95,6 +95,8 @@
 - [x] Verificar que el calendario se puede simular desde la primera jornada.
 - [x] Persistir posesión y estadísticas al simular jornadas automáticamente.
 - [x] Dashboard y Calendario muestran estados de carga y error al consultar jornadas.
+- [x] Próximo partido filtrado por fecha actual para evitar encuentros ya vencidos.
+- [x] Clasificación con estados de carga y error consistentes.
 - [x] Los partidos manuales no alteran la clasificación de copas ni competiciones no ligueras.
 - [x] Resultados manuales y simulados comparten persistencia idempotente.
 - [x] API y calendario distinguen jornadas de liga y rondas de copa.

@@ -5,13 +5,15 @@ import { useStore } from "../../store";
 export default function StandingsView() {
   const { competitions, selectedComp, setSelectedComp, userClubId } = useStore();
   const [rows, setRows] = useState<StandingRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<"clubs" | "selecciones">("clubs");
   const clubComps = competitions.filter((c)=>c.kind === "club");
   const natComps = competitions.filter((c)=>c.kind === "national_team");
   const opts = kind === "clubs" ? clubComps : natComps;
   const sel = selectedComp && opts.some((c)=>c.id===selectedComp) ? selectedComp : (opts[0]?.id ?? 1);
 
-  useEffect(() => { if (sel) api.getStandings(sel).then(setRows).catch(()=>{}); }, [sel, kind]);
+  useEffect(() => { if (sel) { setLoading(true); setError(null); api.getStandings(sel).then(setRows).catch((e)=>{setRows([]);setError(String(e));}).finally(()=>setLoading(false)); } }, [sel, kind]);
 
   return (
     <div className="mx-auto max-w-5xl p-6">
@@ -27,6 +29,8 @@ export default function StandingsView() {
           </select>
         </div>
       </div>
+      {loading && <div className="mb-3 rounded-xl border border-fm-border bg-fm-panel p-4 text-sm text-fm-dim" aria-live="polite">Cargando clasificación…</div>}
+      {error && <div role="alert" className="mb-3 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</div>}
       <div className="overflow-hidden rounded-xl border border-fm-border bg-fm-panel">
         <table className="w-full text-sm">
           <thead className="bg-fm-bg text-xs uppercase tracking-widest text-fm-dim">
