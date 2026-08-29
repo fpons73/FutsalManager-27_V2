@@ -76,7 +76,7 @@
 
 - [ ] Viajes y costes logísticos.
 - [x] Mantenimiento del pabellón con coste operativo semanal, deterioro, alertas y estado visible en Finanzas.
-- [ ] Costes detallados de personal.
+- [x] Costes detallados de personal y staff, con desglose semanal visible en Finanzas.
 - [ ] Merchandising.
 - [ ] Derechos televisivos.
 - [ ] Patrocinadores negociables.
