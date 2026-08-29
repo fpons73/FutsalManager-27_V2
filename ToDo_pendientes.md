@@ -75,7 +75,7 @@
 ## Prioridad 6 — Economía avanzada
 
 - [ ] Viajes y costes logísticos.
-- [ ] Mantenimiento del pabellón.
+- [x] Mantenimiento del pabellón con coste operativo semanal, deterioro, alertas y estado visible en Finanzas.
 - [ ] Costes detallados de personal.
 - [ ] Merchandising.
 - [ ] Derechos televisivos.

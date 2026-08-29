@@ -40,7 +40,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Historial de temporadas, palmarés, récords y evolución de jugadores.
 - Noticias, medios, rumores y reputación pública.
 - Confianza, paciencia y objetivos iniciales de la directiva con evaluación semanal.
-- Economía avanzada: viajes, personal, instalaciones, merchandising y TV.
+- Economía avanzada: mantenimiento operativo del pabellón implementado con deterioro, coste semanal y alertas; viajes, personal, merchandising y TV siguen pendientes.
 - Optimización medida: benchmarks, virtualización, cache, LOD y carga bajo demanda.
 - Tutorial, objetivos de directiva, logros y pulido de errores/estados vacíos.
 
