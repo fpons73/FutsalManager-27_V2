@@ -65,8 +65,8 @@
 - [ ] Noticias generadas por eventos del mundo.
 - [ ] Rumores, medios y reputación pública.
 - [ ] Ruedas de prensa y respuestas del entrenador.
-- [ ] Objetivos de directiva.
-- [ ] Confianza de la directiva.
+- [x] Objetivos de directiva y seguimiento inicial por temporada.
+- [x] Confianza y paciencia de la directiva con evaluación semanal inicial.
 - [ ] Reuniones y conversaciones con la directiva.
 - [ ] Renovación o despido del entrenador.
 - [ ] Logros y hitos de carrera.

@@ -136,6 +136,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             let _ = crate::training::process_training_week(pool, uc).await;
         }
         let _ = crate::finance::process_weekly_finances(pool).await;
+        let _ = crate::commands::board_cmd::evaluate_board(pool).await;
         // Recover player conditions slightly each week
         sqlx::query("UPDATE player_states SET condition_val = MIN(100, condition_val + 5) WHERE condition_val < 100").execute(pool).await.ok();
         sqlx::query("UPDATE player_states SET match_fitness = MIN(100, match_fitness + 3) WHERE match_fitness < 100").execute(pool).await.ok();

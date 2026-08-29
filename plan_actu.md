@@ -39,6 +39,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Estadísticas individuales por partido/temporada y rankings iniciales; análisis postpartido, asistencias avanzadas, porterías imbatidas y gráficos aún pendientes.
 - Historial de temporadas, palmarés, récords y evolución de jugadores.
 - Noticias, medios, rumores y reputación pública.
+- Confianza, paciencia y objetivos iniciales de la directiva con evaluación semanal.
 - Economía avanzada: viajes, personal, instalaciones, merchandising y TV.
 - Optimización medida: benchmarks, virtualización, cache, LOD y carga bajo demanda.
 - Tutorial, objetivos de directiva, logros y pulido de errores/estados vacíos.

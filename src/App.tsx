@@ -21,6 +21,7 @@ import SavesView from "./components/screens/SavesView";
 import StatisticsView from "./components/screens/StatisticsView";
 import RecordsView from "./components/screens/RecordsView";
 import NationalTeamsView from "./components/screens/NationalTeamsView";
+import BoardView from "./components/screens/BoardView";
 import AppShell from "./components/AppShell";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,6 @@ export default function App() {
   const { screen, gameState } = useStore();
   if ((screen as string) === "editor" && !gameState) return <div className="min-h-screen bg-fm-bg"><EditorView /></div>;
   return <Shell>
-    {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
+    {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{(screen as string) === "board" && <BoardView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
   </Shell>;
 }
