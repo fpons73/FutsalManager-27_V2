@@ -45,6 +45,8 @@ pub fn run() {
       commands::national_cmd::get_national_honours,
       commands::board_cmd::get_board_status,
       commands::board_cmd::get_board_goals,
+      commands::board_cmd::get_board_meetings,
+      commands::board_cmd::hold_board_meeting,
       commands::match_live::start_live_match,
       commands::match_live::tick_live,
       commands::match_live::get_live_snapshot,

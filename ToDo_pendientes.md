@@ -68,7 +68,7 @@
 - [ ] Ruedas de prensa y respuestas del entrenador.
 - [x] Objetivos de directiva y seguimiento inicial por temporada.
 - [x] Confianza y paciencia de la directiva con evaluación semanal inicial.
-- [ ] Reuniones y conversaciones con la directiva.
+- [x] Reuniones y conversaciones con la directiva con consecuencias iniciales.
 - [ ] Renovación o despido del entrenador.
 - [ ] Logros y hitos de carrera.
 
