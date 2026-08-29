@@ -44,10 +44,12 @@
 - [x] Goles, asistencias, tiros, faltas, tarjetas y minutos.
 - [x] Porterías imbatidas y estadísticas avanzadas de porteros.
 - [x] Máximos goleadores, asistentes, minutos y valoración mediante rankings.
-- [ ] Récords de clubes y competiciones.
-- [ ] Evolución histórica de CA, PA y atributos.
-- [ ] Historial completo de jugadores y clubes.
-- [ ] Gráficos comparativos y filtros por temporada.
+- [x] Récords iniciales de clubes y competiciones por temporada.
+- [x] Evolución histórica de CA y PA al cierre de temporada; atributos detallados aún pendientes.
+- [ ] Historial completo de jugadores y clubes (historial básico de CA/PA ya disponible).
+- [x] Vista visual de evolución de CA/PA por jugador, accesible desde Plantilla.
+- [x] Filtros de temporada y métrica (CA/PA o moral) en el historial individual.
+- [ ] Gráficos comparativos avanzados entre jugadores y temporadas.
 
 > Hito local actual: estadísticas persistentes para partidos automáticos y manuales, rankings por competición, métricas de disciplina y porterías imbatidas/paradas de portero. Las asistencias se atribuyen mediante el último pasador registrado por el motor de eventos.
 

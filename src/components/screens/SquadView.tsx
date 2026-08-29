@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type ContractRow, type DialogueRow, type PlayerRow, type PromiseRow, type SquadDynamics } from "../../api";
 import { useStore } from "../../store";
 import { EmptyState, MetricCard, Panel, StatusBadge } from "../ui";
+import PlayerHistoryView from "./PlayerHistoryView";
 
 export default function SquadView() {
   const { userClubId, clubs } = useStore();
@@ -23,6 +24,7 @@ export default function SquadView() {
   const [dialogues, setDialogues] = useState<DialogueRow[]>([]);
   const [dialoguePlayer, setDialoguePlayer] = useState<number | null>(null);
   const [dialogueResponse, setDialogueResponse] = useState("support");
+  const [historyPlayer, setHistoryPlayer] = useState<PlayerRow | null>(null);
 
   useEffect(() => {
     if (!userClubId) { setLoading(false); setError("No hay club seleccionado"); return; }
@@ -71,6 +73,7 @@ export default function SquadView() {
         <div><h3 className="font-bold">Conversar</h3><p className="mt-1 text-[11px] text-fm-dim">{dialogues.length ? `Última conversación: ${dialogues[0].response} (${dialogues[0].morale_delta > 0 ? "+" : ""}${dialogues[0].morale_delta})` : "Sin conversaciones recientes"}</p><div className="mt-2 flex gap-2"><select value={dialoguePlayer ?? ""} onChange={e=>setDialoguePlayer(Number(e.target.value))} className="min-w-0 flex-1 rounded border border-fm-border bg-fm-panel px-2 py-1 text-xs"><option value="">Jugador…</option>{players.map(p=><option key={p.id} value={p.id}>{p.common_name}</option>)}</select><select value={dialogueResponse} onChange={e=>setDialogueResponse(e.target.value)} className="rounded border border-fm-border bg-fm-panel px-2 py-1 text-xs"><option value="support">Apoyar</option><option value="demand">Exigir</option><option value="neutral">Escuchar</option></select></div><button disabled={!dialoguePlayer} onClick={async()=>{if(!dialoguePlayer)return; await api.talkToPlayer(dialoguePlayer,"squad_status",dialogueResponse); setDialogues(await api.getPlayerDialogues()); setPlayers(userClubId ? await api.getSquad(userClubId) : players);}} className="mt-2 rounded bg-fm-accent px-3 py-1 text-xs font-bold text-black disabled:opacity-50">Registrar conversación</button></div>
         <div><h3 className="font-bold">Promesas activas</h3>{promises.length ? <ul className="mt-2 space-y-1 text-xs text-fm-dim">{promises.slice(0,4).map(p=><li key={p.id}>Jugador #{p.player_id} · {p.promise_type} · objetivo {p.target_value} · <span className="text-fm-amber-300">{p.status}</span></li>)}</ul> : <p className="mt-2 text-xs text-fm-dim">No hay promesas registradas.</p>}</div>
       </Panel>
+      {historyPlayer && <PlayerHistoryView playerId={historyPlayer.id} playerName={historyPlayer.common_name} />}
       <Panel className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -94,7 +97,7 @@ export default function SquadView() {
             <tbody>
               {players.map((p) => (
                 <tr key={p.id} className="border-t border-fm-border hover:bg-fm-panel2">
-                  <td className="px-3 py-2 font-semibold"><span className="mr-2 inline-flex items-center gap-1"><img src={p.flag_path ?? undefined} alt={p.nation} title={p.nation} className="h-3 w-5 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{p.second_flag_path && <img src={p.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-3 w-5 rounded object-cover" />}</span>{p.common_name} <span className="font-normal text-fm-dim">({p.first_name} {p.last_name})</span></td>
+                  <td className="px-3 py-2 font-semibold"><button onClick={()=>setHistoryPlayer(p)} className="text-left hover:text-fm-accent"><span className="mr-2 inline-flex items-center gap-1"><img src={p.flag_path ?? undefined} alt={p.nation} title={p.nation} className="h-3 w-5 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{p.second_flag_path && <img src={p.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-3 w-5 rounded object-cover" />}</span>{p.common_name} <span className="font-normal text-fm-dim">({p.first_name} {p.last_name})</span></button></td>
                   <td className="px-2 py-2 text-center"><span className={`rounded px-1.5 py-0.5 text-xs font-bold ${p.position==="POR" ? "bg-amber-500/20 text-amber-400" : p.position==="PIV" ? "bg-red-500/20 text-red-400" : p.position==="CIE" ? "bg-sky-500/20 text-sky-400" : "bg-emerald-500/20 text-emerald-400"}`}>{p.position}</span></td>
                   <td className="px-2 py-2 text-center">{p.age}</td><td className="px-2 py-2 text-center text-xs">{p.squad_role}</td><td className="px-2 py-2 text-center">{p.morale}%</td>
                   <td className="px-2 py-2 text-center text-xs"><span className="inline-flex items-center gap-1"><img src={p.flag_path ?? undefined} alt={p.nation} title={p.nation} className="h-3 w-5 rounded object-cover" onError={(e)=>{e.currentTarget.style.display="none"}} />{p.nation}{p.second_flag_path && <img src={p.second_flag_path} alt="Segunda nacionalidad" title="Segunda nacionalidad" className="h-3 w-5 rounded object-cover" />}</span></td>

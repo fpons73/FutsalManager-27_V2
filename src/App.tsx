@@ -19,6 +19,7 @@ import SeasonMovements from "./components/screens/SeasonMovements";
 import HonoursView from "./components/screens/HonoursView";
 import SavesView from "./components/screens/SavesView";
 import StatisticsView from "./components/screens/StatisticsView";
+import RecordsView from "./components/screens/RecordsView";
 import AppShell from "./components/AppShell";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -115,6 +116,7 @@ export default function App() {
       {screen === "squad" && <SquadView />}
       {screen === "standings" && <StandingsView />}
       {(screen as string) === "statistics" && <StatisticsView />}
+      {(screen as string) === "records" && <RecordsView />}
       {screen === "fixtures" && <FixturesView />}
       {screen === "tactics" && <MatchFlow />}
       {screen === "market" && <MarketView />}

@@ -98,6 +98,24 @@ async fn record_honours(pool: &SqlitePool, season: &str) -> Result<i64, String> 
     Ok(count)
 }
 
+async fn record_season_records(pool: &SqlitePool, season: &str) -> Result<(), String> {
+    let comps: Vec<(i64,)> = sqlx::query_as("SELECT id FROM competitions").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (cid,) in comps {
+        let leaders: Vec<(i64, i64, i64, i64)> = sqlx::query_as("SELECT player_id, SUM(goals), SUM(assists), SUM(minutes_played) FROM player_season_stats WHERE competition_id=? AND season=? GROUP BY player_id").bind(cid).bind(season).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        for (pid, goals, assists, minutes) in leaders {
+            for (kind, value) in [("top_scorer", goals), ("top_assist", assists), ("most_minutes", minutes)] {
+                sqlx::query("INSERT OR REPLACE INTO competition_records(competition_id,record_type,player_id,value,season) VALUES(?,?,?,?,?)").bind(cid).bind(kind).bind(pid).bind(value as f64).bind(season).execute(pool).await.map_err(|e| e.to_string())?;
+            }
+        }
+        let clubs: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT club_id, SUM(goals_for), SUM(goals_against) FROM league_standings WHERE competition_id=? AND season=? GROUP BY club_id").bind(cid).bind(season).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        for (club_id, gf, ga) in clubs {
+            sqlx::query("INSERT OR REPLACE INTO club_records(club_id,competition_id,record_type,value,season) VALUES(?,?,?,?,?)").bind(club_id).bind(cid).bind("goals_for").bind(gf as f64).bind(season).execute(pool).await.map_err(|e| e.to_string())?;
+            sqlx::query("INSERT OR REPLACE INTO club_records(club_id,competition_id,record_type,value,season) VALUES(?,?,?,?,?)").bind(club_id).bind(cid).bind("goals_against").bind(ga as f64).bind(season).execute(pool).await.map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 pub async fn rollover_season(pool: &SqlitePool) -> Result<String, String> {
     let (season,): (String,) = sqlx::query_as("SELECT season FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
     let parts: Vec<&str> = season.split('/').collect();
@@ -107,7 +125,12 @@ pub async fn rollover_season(pool: &SqlitePool) -> Result<String, String> {
         format!("{}/{}", a+1, b+1)
     } else { "2027/2028".into() };
 
+    let history_players: Vec<(i64, Option<i64>, i64, i64, i64)> = sqlx::query_as("SELECT p.id, c.club_id, ps.current_ability, ps.potential_ability, ps.morale FROM players p JOIN player_states ps ON ps.player_id=p.id LEFT JOIN contracts c ON c.player_id=p.id AND c.is_active=1").fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (player_id, club_id, ca, pa, morale) in history_players {
+        sqlx::query("INSERT OR REPLACE INTO player_attribute_history(season,player_id,club_id,current_ability,potential_ability,morale,created_at) VALUES(?,?,?,?,?,?,?)").bind(&season).bind(player_id).bind(club_id).bind(ca).bind(pa).bind(morale).bind(&season).execute(pool).await.map_err(|e| e.to_string())?;
+    }
     let honours = record_honours(pool, &season).await?;
+    record_season_records(pool, &season).await?;
 
     // Prize money for top 3
     let comps: Vec<(i64,)> = sqlx::query_as("SELECT id FROM competitions").fetch_all(pool).await.map_err(|e| e.to_string())?;
