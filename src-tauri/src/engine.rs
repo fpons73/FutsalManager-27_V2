@@ -875,6 +875,20 @@ mod tests {
     }
 
     #[test]
+    fn automation_triggers_when_losing_late() {
+        let roster: Vec<(u32,u8,Role,PlayerAttrs)> = (1..=12).map(|i| (i, i as u8, Role::ALA, mk_attrs(120, Role::ALA))).collect();
+        let mut eng = MatchEngine::new([(0,"A".into(),"#f00".into()),(1,"B".into(),"#00f".into())], [roster.clone(), roster]).with_seed(7);
+        eng.set_automation(0, Some(EngineAutomation { trigger_type: 0, threshold: 0.0, tactics: EngineTactics { formation: 3, tempo: 90.0, pressing: 85.0, defensive_line: 80.0, width: 70.0 } }));
+        eng.start();
+        eng.score = [0, 2];
+        eng.time = 1900;
+        eng.tick();
+        assert!(eng.automation_applied[0]);
+        assert_eq!(eng.tactics[0].formation, 3);
+        assert!(eng.events.iter().any(|e| e.kind == "tactical_automation"));
+    }
+
+    #[test]
     fn goal_prob_distance() {
         let shooter = mk_attrs(150, Role::PIV);
         let p_close = calculate_goal_probability(&shooter, 2.0, 45.0, false);

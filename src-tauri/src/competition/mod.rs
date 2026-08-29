@@ -87,7 +87,7 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
 
 
     let comps: Vec<(i64, String)> =
-        sqlx::query_as("SELECT id, season FROM competitions")
+        sqlx::query_as("SELECT id, season FROM competitions WHERE competition_type='league' AND kind='club'")
             .fetch_all(pool).await.map_err(|e| e.to_string())?;
 
     for (comp_id, season) in comps {
@@ -107,6 +107,7 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
         let existing: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE competition_id=? AND season=?")
             .bind(comp_id).bind(&season).fetch_one(pool).await.map_err(|e| e.to_string())?;
         if existing.0 > 0 { continue; }
+        if team_ids.len() < 2 { continue; }
 
         for (idx, round) in rounds.iter().enumerate() {
             let date = start + chrono::Duration::days(idx as i64 * 7);

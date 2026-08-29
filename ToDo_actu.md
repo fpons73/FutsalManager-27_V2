@@ -84,12 +84,15 @@
 - [x] Staff con efectos reales en entrenamiento, cantera, scouting y riesgo de lesiones.
 - [x] Resumen visual de impacto del staff en Entrenamientos y Cantera.
 - [x] Automatismos tácticos entrenables y configurables, aplicados contextualmente en simulación.
+- [x] Prueba de regresión para activación táctica en tramo final.
 - [ ] Moral, química y roles.
 
 ## Hito H — Competiciones y carrera larga
 
 - [x] Estructura de competiciones de liga y copa en la base de datos.
 - [x] Generación inicial de eliminatorias de copa y vínculos partido/club.
+- [x] Generación automática de calendarios de liga al crear el mundo.
+- [x] Verificar que el calendario se puede simular desde la primera jornada.
 - [x] API y calendario distinguen jornadas de liga y rondas de copa.
 - [x] Resultados de copa registran el club ganador de cada eliminatoria.
 - [x] Avance automático de ganadores a la siguiente ronda.
