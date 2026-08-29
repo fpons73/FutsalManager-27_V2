@@ -34,6 +34,8 @@ pub fn run() {
       commands::game::get_competitions,
       commands::game::get_next_fixture,
       commands::game::get_player_statistics,
+      commands::national_cmd::get_national_players,
+      commands::national_cmd::set_national_callup,
       commands::match_live::start_live_match,
       commands::match_live::tick_live,
       commands::match_live::get_live_snapshot,

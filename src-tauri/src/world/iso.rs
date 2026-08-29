@@ -2,7 +2,7 @@ use sqlx::SqlitePool;
 use std::path::Path;
 
 pub async fn import_catalog(pool: &SqlitePool) -> Result<i64, String> {
-    let path = Path::new("Países e ISOS.csv");
+    let path = [Path::new("Países e ISOS.csv"), Path::new("../Países e ISOS.csv"), Path::new("../../Países e ISOS.csv")].into_iter().find(|p| p.exists()).unwrap_or(Path::new("Países e ISOS.csv"));
     if !path.exists() { return Ok(0); }
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let mut imported = 0;

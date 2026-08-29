@@ -30,8 +30,8 @@
 
 ## Prioridad 3 — Selecciones nacionales
 
-- [ ] Plantillas de selecciones nacionales.
-- [ ] Convocatorias y elegibilidad por nacionalidad.
+- [x] Plantillas de selecciones nacionales y jugadores elegibles.
+- [x] Convocatorias configurables y elegibilidad por nacionalidad principal o secundaria.
 - [ ] Seleccionadores y staff internacional.
 - [ ] Ventanas internacionales.
 - [ ] Clasificaciones y fases de clasificación.
