@@ -14,6 +14,8 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     let _ = crate::commands::national_cmd::generate_international_windows(pool).await;
     let _ = crate::commands::national_cmd::ensure_national_tournament_entries(pool).await;
     let _ = crate::commands::national_cmd::generate_national_tournament_matches(pool).await;
+    let _ = crate::commands::national_cmd::progress_national_tournaments(pool).await;
+    let _ = crate::commands::national_cmd::resolve_national_knockouts(pool).await;
     let (cur_date,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1")
         .fetch_one(pool).await.map_err(|e| e.to_string())?;
 
