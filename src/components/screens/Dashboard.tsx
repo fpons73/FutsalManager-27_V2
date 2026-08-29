@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [events, setEvents] = useState<string[]>([]);
   const [seasonDone, setSeasonDone] = useState(false);
   const [seasonMsg, setSeasonMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const myClub = clubs.find((c) => c.id === userClubId);
   const myComp = competitions.find((c) => c.id === selectedComp) ?? competitions[0];
@@ -25,6 +26,7 @@ export default function Dashboard() {
     ]);
     setNext(n as any);
     setStandings(s as any);
+    setError(null);
     setSeasonDone(done as boolean);
   };
 
@@ -45,7 +47,7 @@ export default function Dashboard() {
       }
       const st = await api.getGameState(); useStore.getState().setGameState(st);
       await refresh();
-    } catch (e) { alert(String(e)); }
+    } catch (e) { setError(String(e)); }
     finally { setAdvancing(false); }
   };
 
@@ -80,6 +82,8 @@ export default function Dashboard() {
           <button onClick={() => advance(7)} disabled={advancing} className="rounded-lg border border-fm-border bg-fm-panel2 px-4 py-2.5 text-sm font-semibold hover:bg-fm-border disabled:opacity-50">+7 días</button>
         </div>
       </div>
+
+      {error && <div role="alert" className="rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</div>}
 
       {seasonDone && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">

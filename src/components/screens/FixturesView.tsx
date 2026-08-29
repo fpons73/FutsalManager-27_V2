@@ -7,10 +7,17 @@ import CupBracket from "./CupBracket";
 export default function FixturesView() {
   const { competitions, selectedComp, setSelectedComp } = useStore();
   const [rows, setRows] = useState<FixtureRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<"clubs" | "selecciones">("clubs");
   const opts = kind === "clubs" ? competitions.filter((c)=>c.kind === "club") : competitions.filter((c)=>c.kind === "national_team");
   const sel = selectedComp && opts.some((c)=>c.id===selectedComp) ? selectedComp : (opts[0]?.id ?? 1);
-  useEffect(()=>{ if(sel) api.getFixtures(sel).then(setRows).catch(()=>{}); },[sel, kind]);
+  useEffect(()=>{
+    if (!sel) return;
+    setLoading(true);
+    setError(null);
+    api.getFixtures(sel).then(setRows).catch((e)=>{ setRows([]); setError(String(e)); }).finally(()=>setLoading(false));
+  },[sel, kind]);
 
   const byRound = rows.reduce<Record<number, FixtureRow[]>>((acc, r)=>{ (acc[r.round]??=[]).push(r); return acc; },{});
   const selected = opts.find((c) => c.id === sel);
@@ -30,8 +37,10 @@ export default function FixturesView() {
           </select>
         </div>
       </div>
-      {isCup && <CupBracket rounds={byRound} />}
-      <Panel className="space-y-4 p-4">
+      {loading && <Panel className="p-6 text-center text-sm text-fm-dim" aria-live="polite">Cargando calendario…</Panel>}
+      {error && <Panel className="p-6 text-center"><div role="alert" className="text-sm text-amber-300">No se pudo cargar el calendario: {error}</div><button onClick={()=>{ if(sel) { setLoading(true); api.getFixtures(sel).then(setRows).catch((e)=>setError(String(e))).finally(()=>setLoading(false)); } }} className="mt-3 rounded-lg bg-fm-accent px-3 py-1.5 text-xs font-bold text-black">Reintentar</button></Panel>}
+      {!loading && !error && isCup && <CupBracket rounds={byRound} />}
+      {!loading && !error && <Panel className="space-y-4 p-4">
         {Object.entries(byRound).map(([round, fixtures])=>(
           <div key={round} className="rounded-xl border border-fm-border bg-fm-bg/50 p-3">
             {isCup && <div className="mb-2"><StatusBadge tone="warning">Eliminatoria</StatusBadge></div>}
@@ -48,7 +57,7 @@ export default function FixturesView() {
           </div>
         ))}
         {rows.length === 0 && <EmptyState title="No hay partidos para esta competición" description="Prueba otra competición o avanza el calendario." />}
-      </Panel>
+      </Panel>}
     </div>
   );
 }
