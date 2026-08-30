@@ -74,7 +74,7 @@
 
 ## Prioridad 6 — Economía avanzada
 
-- [ ] Viajes y costes logísticos.
+- [x] Viajes y costes logísticos de partidos fuera de casa, con distancia estimada, libro de gastos y protección contra duplicados.
 - [x] Mantenimiento del pabellón con coste operativo semanal, deterioro, alertas y estado visible en Finanzas.
 - [x] Costes detallados de personal y staff, con desglose semanal visible en Finanzas.
 - [ ] Merchandising.
@@ -104,6 +104,7 @@
 - [ ] Soporte mejorado para lectores de pantalla.
 - [ ] Tutorial y onboarding inicial.
 - [x] Menú inicial visual con fondo de pabellón, acciones principales y acceso al Editor.
+- [x] Sistema visual base definido con superficies oscuras, acentos azul/cian, tipografía jerárquica y paneles translúcidos.
 - [ ] Ayuda contextual dentro del juego.
 
 ## Prioridad 9 — Rendimiento y distribución

@@ -36,6 +36,7 @@ pub async fn init_pool(path: Option<PathBuf>) -> Result<SqlitePool, sqlx::Error>
         .await?;
     sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await?;
     sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
+    ensure_legacy_schema(&pool).await?;
     sqlx::migrate!("./migrations").run(&pool).await.map_err(|e| {
         eprintln!("migration error: {e}");
         sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
@@ -49,10 +50,21 @@ pub async fn init_memory_pool() -> Result<SqlitePool, sqlx::Error> {
         .connect("sqlite::memory:")
         .await?;
     sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
+    ensure_legacy_schema(&pool).await?;
     sqlx::migrate!("./migrations").run(&pool).await.map_err(|e| {
         sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     })?;
     Ok(pool)
+}
+
+async fn ensure_legacy_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let (exists,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='competitions'").fetch_one(pool).await?;
+    if exists == 0 { return Ok(()); }
+    let (has_kind,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pragma_table_info('competitions') WHERE name='kind'").fetch_one(pool).await?;
+    if has_kind == 0 {
+        sqlx::query("ALTER TABLE competitions ADD COLUMN kind TEXT NOT NULL DEFAULT 'club'").execute(pool).await?;
+    }
+    Ok(())
 }
 
 pub fn set_pool(pool: SqlitePool) {

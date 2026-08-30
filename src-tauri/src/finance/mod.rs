@@ -19,6 +19,8 @@ pub struct FinanceRow {
     pub stadium_name: Option<String>,
     pub staff_weekly_cost: f64,
     pub staff_count: i64,
+    pub travel_spend: f64,
+    pub away_matches: i64,
 }
 
 pub async fn get_finance(pool: &SqlitePool, club_id: i64) -> Result<FinanceRow, String> {
@@ -30,7 +32,8 @@ pub async fn get_finance(pool: &SqlitePool, club_id: i64) -> Result<FinanceRow, 
     let stadium: Option<(String, i64, f64)> = sqlx::query_as("SELECT s.name, so.condition, so.weekly_cost FROM clubs c JOIN stadiums s ON s.id=c.stadium_id LEFT JOIN stadium_operations so ON so.stadium_id=s.id WHERE c.id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?;
     let (stadium_name, stadium_condition, stadium_weekly_cost) = stadium.map(|(n,c,cost)|(Some(n),c,cost)).unwrap_or((None,100,0.0));
     let staff: (f64, i64) = sqlx::query_as("SELECT COALESCE(weekly_cost,0), COALESCE(staff_count,0) FROM club_staff_costs WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0.0, 0));
-    Ok(FinanceRow { club_id, club_name: row.0, balance: row.1, transfer_budget: row.2, wage_budget: row.3, total_wages: row.4, sponsorship: row.5, ticket_income: row.6, prize_money: row.7, weekly_wages: weekly, monthly_balance: monthly, stadium_condition, stadium_weekly_cost, stadium_name, staff_weekly_cost: staff.0, staff_count: staff.1 })
+    let travel: (f64, i64) = sqlx::query_as("SELECT COALESCE(travel_spend,0), COALESCE(away_matches,0) FROM club_travel_finance WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0.0, 0));
+    Ok(FinanceRow { club_id, club_name: row.0, balance: row.1, transfer_budget: row.2, wage_budget: row.3, total_wages: row.4, sponsorship: row.5, ticket_income: row.6, prize_money: row.7, weekly_wages: weekly, monthly_balance: monthly, stadium_condition, stadium_weekly_cost, stadium_name, staff_weekly_cost: staff.0, staff_count: staff.1, travel_spend: travel.0, away_matches: travel.1 })
 }
 
 pub async fn process_stadium_operations(pool: &SqlitePool) -> Result<(), String> { let rows:Vec<(i64,i64,f64)>=sqlx::query_as("SELECT so.stadium_id,so.condition,so.weekly_cost FROM stadium_operations so JOIN clubs c ON c.stadium_id=so.stadium_id").fetch_all(pool).await.map_err(|e|e.to_string())?;let(date,):(String,)=sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e|e.to_string())?;for(stadium,condition,cost)in rows{let club:Option<(i64,)>=sqlx::query_as("SELECT id FROM clubs WHERE stadium_id=?").bind(stadium).fetch_optional(pool).await.map_err(|e|e.to_string())?;if let Some((club_id,))=club{sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(cost).bind(club_id).execute(pool).await.map_err(|e|e.to_string())?;sqlx::query("UPDATE stadium_operations SET condition=MAX(0,condition-1),last_maintenance=? WHERE stadium_id=?").bind(&date).bind(stadium).execute(pool).await.map_err(|e|e.to_string())?;if condition<=30{let _=sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'board','Mantenimiento urgente','El pabellón necesita mantenimiento para evitar pérdida de ingresos.',?,1)").bind(club_id).bind(&date).execute(pool).await;}}}Ok(())}
@@ -61,6 +64,20 @@ pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn add_travel_cost(pool: &SqlitePool, match_id: i64, club_id: i64, origin_city_id: Option<i64>, destination_city_id: Option<i64>, distance_km: f64, cost: f64, date: &str) -> Result<(), String> {
+    if !distance_km.is_finite() || !cost.is_finite() || distance_km < 0.0 || cost < 0.0 { return Err("Coste de viaje no válido".into()); }
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let inserted = sqlx::query("INSERT OR IGNORE INTO match_travel_costs(match_id,club_id,origin_city_id,destination_city_id,distance_km,cost,created_at) VALUES(?,?,?,?,?,?,?)")
+        .bind(match_id).bind(club_id).bind(origin_city_id).bind(destination_city_id).bind(distance_km).bind(cost).bind(date).execute(&mut *tx).await.map_err(|e| e.to_string())?.rows_affected();
+    if inserted > 0 {
+        sqlx::query("INSERT INTO club_travel_finance(club_id,travel_spend,away_matches,updated_at) VALUES(?,?,1,?) ON CONFLICT(club_id) DO UPDATE SET travel_spend=travel_spend+excluded.travel_spend,away_matches=away_matches+1,updated_at=excluded.updated_at")
+            .bind(club_id).bind(cost).bind(date).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(cost).bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub async fn add_ticket_income(pool: &SqlitePool, club_id: i64, amount: f64) -> Result<(), String> {
     sqlx::query("UPDATE club_finances SET balance=balance+?, ticket_income=ticket_income+? WHERE club_id=?").bind(amount).bind(amount).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -69,4 +86,24 @@ pub async fn add_ticket_income(pool: &SqlitePool, club_id: i64, amount: f64) -> 
 pub async fn check_transfer_budget(pool: &SqlitePool, club_id: i64, fee: f64) -> Result<bool, String> {
     let (budget,): (f64,) = sqlx::query_as("SELECT transfer_budget FROM club_finances WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
     Ok(fee <= budget)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{db, world};
+
+    #[tokio::test]
+    async fn travel_cost_is_recorded_once_per_away_match() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (match_id, away_id): (i64, i64) = sqlx::query_as("SELECT id, away_club_id FROM matches LIMIT 1").fetch_one(&pool).await.unwrap();
+        let (before,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(away_id).fetch_one(&pool).await.unwrap();
+        add_travel_cost(&pool, match_id, away_id, Some(1), Some(2), 500.0, 875.0, "2026-07-10").await.unwrap();
+        add_travel_cost(&pool, match_id, away_id, Some(1), Some(2), 500.0, 875.0, "2026-07-10").await.unwrap();
+        let (entries,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM match_travel_costs WHERE match_id=? AND club_id=?").bind(match_id).bind(away_id).fetch_one(&pool).await.unwrap();
+        let (after,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(away_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(entries, 1);
+        assert!((before - after - 875.0).abs() < 0.01);
+    }
 }

@@ -41,6 +41,11 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
     let mut results = Vec::new();
     let user_club: Option<(i64,)> = sqlx::query_as("SELECT user_club_id FROM game_state WHERE id=1").fetch_optional(pool).await.map_err(|e| e.to_string())?;
     for (mid, hid, aid, comp_id) in matches.iter().copied() {
+        let (origin_city, origin_nation): (Option<i64>, i64) = sqlx::query_as("SELECT city_id, nation_id FROM clubs WHERE id=?").bind(aid).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let (destination_city, destination_nation): (Option<i64>, i64) = sqlx::query_as("SELECT city_id, nation_id FROM clubs WHERE id=?").bind(hid).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let distance_km = estimate_travel_distance(origin_city, destination_city, origin_nation != destination_nation);
+        let travel_cost = 450.0 + distance_km * 0.85;
+        crate::finance::add_travel_cost(pool, mid, aid, origin_city, destination_city, distance_km, travel_cost, &cur_date).await?;
         let snap = crate::engine::simulate_clubs(pool, hid, aid).await?;
         let home_goals = snap.score[0] as i64;
         let away_goals = snap.score[1] as i64;
@@ -193,6 +198,12 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         matches_played: results.len() as i64,
         results,
     })
+}
+
+fn estimate_travel_distance(origin_city: Option<i64>, destination_city: Option<i64>, international: bool) -> f64 {
+    let base = if international { 1200.0 } else { 80.0 };
+    let city_delta = match (origin_city, destination_city) { (Some(a), Some(b)) => ((a - b).unsigned_abs() % 700) as f64, _ => 250.0 };
+    (base + city_delta).max(35.0)
 }
 
 fn snap_stats(snap: &crate::engine::MatchSnapshot) -> Vec<(u32,u32,bool,u32,u32,u32,u32,u32,u32,u32,u32,f64)> {

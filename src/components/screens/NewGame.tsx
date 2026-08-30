@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type ClubRow, type CompRow } from "../../api";
 import { useStore } from "../../store";
 
@@ -12,13 +12,17 @@ export default function NewGame() {
   const [creating, setCreating] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [selectedClub, setSelectedClub] = useState<ClubRow | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const loadStarted = useRef(false);
 
   useEffect(() => {
+    if (loadStarted.current) return;
+    loadStarted.current = true;
     api.newGame().then((res) => {
       setLocalClubs(res.clubs);
       setComps(res.competitions);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((e) => { setError(String(e)); setLoading(false); });
   }, []);
 
   const start = async (clubId: number) => {
@@ -44,6 +48,7 @@ export default function NewGame() {
   };
 
   if (loading) return <div className="p-12 text-center text-fm-dim">Generando mundo…</div>;
+  if (error) return <div className="mx-auto max-w-xl p-6"><div className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-6 text-center"><h1 className="font-black text-rose-200">No se pudo cargar la nueva partida</h1><p className="mt-2 break-words text-sm text-rose-100/80">{error}</p><button onClick={()=>{setError(null);setLoading(true);api.newGame().then((res)=>{setLocalClubs(res.clubs);setComps(res.competitions);}).catch((e)=>setError(String(e))).finally(()=>setLoading(false));}} className="mt-4 rounded-lg bg-fm-accent px-4 py-2 font-bold text-black">Reintentar</button><button onClick={()=>setScreen("home")} className="ml-2 rounded-lg border border-fm-border px-4 py-2 text-sm font-bold">Menú</button></div></div>;
 
   // Competiciones por tipo (clubes / selecciones)
   const natComps = comps.filter((c) => c.kind === "national_team");
@@ -60,7 +65,7 @@ export default function NewGame() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <button onClick={()=>setScreen("newgame")} className="mb-4 rounded-lg border border-fm-border px-3 py-1.5 text-sm text-fm-dim hover:text-white">← Volver al menú principal</button>
+      <button onClick={()=>setScreen("home")} className="mb-4 rounded-lg border border-fm-border px-3 py-1.5 text-sm text-fm-dim hover:text-white">← Volver al menú principal</button>
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-black tracking-tight"><span className="text-fm-accent">FUTSAL</span> MANAGER 27</h1>
         <p className="mt-2 text-fm-dim">Elige un proyecto y construye tu dinastía de futsal en la temporada 2026/27</p>

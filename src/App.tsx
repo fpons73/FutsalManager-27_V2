@@ -51,8 +51,9 @@ function MatchFlow() {
 
 export default function App() {
   const { screen, gameState } = useStore();
-  if (!gameState && (screen as string) === "newgame") return <StartMenu />;
+  if (!gameState && (screen as string) === "home") return <StartMenu />;
   if ((screen as string) === "editor" && !gameState) return <div className="min-h-screen bg-fm-bg"><EditorView /></div>;
+  if (!gameState && (screen as string) === "saves") return <SavesView />;
   return <Shell>
     {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{(screen as string) === "board" && <BoardView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
   </Shell>;

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ClubRow, CompRow, GameStateRow } from "./api";
 
-type Screen = "newgame" | "dashboard" | "squad" | "standings" | "fixtures" | "tactics" | "market" | "scouting" | "inbox" | "training" | "youth" | "finance" | "saves" | "editor";
+type Screen = "home" | "newgame" | "dashboard" | "squad" | "standings" | "fixtures" | "tactics" | "market" | "scouting" | "inbox" | "training" | "youth" | "finance" | "saves" | "editor";
 
 interface AppStore {
   screen: Screen;
@@ -20,7 +20,7 @@ interface AppStore {
 }
 
 export const useStore = create<AppStore>((set) => ({
-  screen: "newgame",
+  screen: "home",
   gameState: null,
   clubs: [],
   competitions: [],
@@ -32,5 +32,5 @@ export const useStore = create<AppStore>((set) => ({
   setCompetitions: (competitions) => set({ competitions }),
   setSelectedComp: (selectedComp) => set({ selectedComp }),
   setUserClub: (userClubId) => set({ userClubId }),
-  resetSession: () => set({ gameState: null, userClubId: null, clubs: [], competitions: [], selectedComp: null, screen: "newgame" }),
+  resetSession: () => set({ gameState: null, userClubId: null, clubs: [], competitions: [], selectedComp: null, screen: "home" }),
 }));
