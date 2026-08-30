@@ -86,7 +86,7 @@
 - [x] Costes detallados de personal y staff, con desglose semanal visible en Finanzas.
 - [x] Merchandising con demanda por reputación, ventas semanales, ingresos persistentes y métricas visibles en Finanzas.
 - [x] Derechos televisivos con contratos, ingresos semanales, vencimientos y alertas.
-- [ ] Patrocinadores negociables.
+- [x] Patrocinadores negociables con contratos, pagos semanales, objetivos y alertas.
 - [ ] Mejoras de instalaciones.
 - [ ] Demanda dinámica y precios de entradas.
 - [ ] Repercusión económica de resultados y reputación.
