@@ -88,6 +88,7 @@
 - [x] Derechos televisivos con contratos, ingresos semanales, vencimientos y alertas.
 - [x] Patrocinadores negociables con contratos, pagos semanales, objetivos y alertas.
 - [x] Área Comercial inicial integrada en la navegación y Finanzas.
+- [x] Ofertas negociables de derechos televisivos con firma y vencimiento.
 - [ ] Mejoras de instalaciones.
 - [ ] Demanda dinámica y precios de entradas.
 - [ ] Repercusión económica de resultados y reputación.

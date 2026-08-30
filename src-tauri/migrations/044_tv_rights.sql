@@ -23,3 +23,20 @@ INSERT OR IGNORE INTO tv_rights_contracts(club_id, broadcaster, weekly_amount, b
 SELECT c.id, 'Futsal Sports Network', MAX(250.0, c.reputation * 3.0), MAX(50.0, c.reputation * 0.25),
        COALESCE((SELECT game_date FROM game_state WHERE id=1), '2026-07-10'), '2027-06-30'
 FROM clubs c;
+
+CREATE TABLE IF NOT EXISTS tv_rights_offers (
+  id INTEGER PRIMARY KEY,
+  club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+  broadcaster TEXT NOT NULL,
+  weekly_amount REAL NOT NULL,
+  bonus_per_match REAL NOT NULL DEFAULT 0,
+  duration_weeks INTEGER NOT NULL DEFAULT 52,
+  expires_date TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'available'
+);
+
+INSERT INTO tv_rights_offers(club_id,broadcaster,weekly_amount,bonus_per_match,duration_weeks,expires_date)
+SELECT c.id, 'Global Futsal TV', MAX(300.0,c.reputation*3.5), MAX(75.0,c.reputation*0.3), 52,
+       date(COALESCE((SELECT game_date FROM game_state WHERE id=1),'2026-07-10'), '+30 day')
+FROM clubs c
+WHERE NOT EXISTS (SELECT 1 FROM tv_rights_offers o WHERE o.club_id=c.id AND o.status='available');

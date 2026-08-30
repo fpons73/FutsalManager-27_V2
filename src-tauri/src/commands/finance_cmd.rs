@@ -3,6 +3,16 @@ use tauri::State;
 use crate::commands::AppState;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct TvOfferRow {
+    pub id: i64,
+    pub broadcaster: String,
+    pub weekly_amount: f64,
+    pub bonus_per_match: f64,
+    pub duration_weeks: i64,
+    pub expires_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct SponsorshipOfferRow {
     pub id: i64,
     pub sponsor_name: String,
@@ -27,6 +37,32 @@ async fn user_club(pool: &sqlx::SqlitePool) -> Result<i64, String> {
 pub async fn get_finance(state: State<'_, AppState>) -> Result<crate::finance::FinanceRow, String> {
     let pool = active_pool(&state)?;
     crate::finance::get_finance(&pool, user_club(&pool).await?).await
+}
+
+#[tauri::command]
+pub async fn get_tv_offers(state: State<'_, AppState>) -> Result<Vec<TvOfferRow>, String> {
+    let pool = active_pool(&state)?;
+    let club = user_club(&pool).await?;
+    sqlx::query_as("SELECT id,broadcaster,weekly_amount,bonus_per_match,duration_weeks,expires_date FROM tv_rights_offers WHERE club_id=? AND status='available' ORDER BY weekly_amount DESC")
+        .bind(club).fetch_all(&pool).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn accept_tv_offer(state: State<'_, AppState>, offer_id: i64) -> Result<String, String> {
+    let pool = active_pool(&state)?;
+    let club = user_club(&pool).await?;
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let offer: Option<(String,f64,f64,i64,String)> = sqlx::query_as("SELECT broadcaster,weekly_amount,bonus_per_match,duration_weeks,expires_date FROM tv_rights_offers WHERE id=? AND club_id=? AND status='available'").bind(offer_id).bind(club).fetch_optional(&mut *tx).await.map_err(|e| e.to_string())?;
+    let Some((broadcaster, weekly, bonus_match, weeks, expires)) = offer else { return Err("La oferta de TV ya no está disponible".into()); };
+    let (today,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
+    if today > expires { return Err("La oferta de TV ha caducado".into()); }
+    sqlx::query("UPDATE tv_rights_contracts SET status='replaced' WHERE club_id=? AND status='active'").bind(club).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    let end = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").map_err(|e| e.to_string())? + chrono::Duration::weeks(weeks);
+    sqlx::query("INSERT INTO tv_rights_contracts(club_id,broadcaster,weekly_amount,bonus_per_match,start_date,end_date,status) VALUES(?,?,?,?,?,?, 'active')").bind(club).bind(&broadcaster).bind(weekly).bind(bonus_match).bind(&today).bind(end.format("%Y-%m-%d").to_string()).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE tv_rights_offers SET status='accepted' WHERE id=?").bind(offer_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE tv_rights_offers SET status='expired' WHERE club_id=? AND status='available' AND id<>?").bind(club).bind(offer_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(format!("Contrato televisivo firmado con {broadcaster}"))
 }
 
 #[tauri::command]
