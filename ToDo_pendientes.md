@@ -77,7 +77,7 @@
 - [x] Viajes y costes logísticos de partidos fuera de casa, con distancia estimada, libro de gastos y protección contra duplicados.
 - [x] Mantenimiento del pabellón con coste operativo semanal, deterioro, alertas y estado visible en Finanzas.
 - [x] Costes detallados de personal y staff, con desglose semanal visible en Finanzas.
-- [ ] Merchandising.
+- [x] Merchandising con demanda por reputación, ventas semanales, ingresos persistentes y métricas visibles en Finanzas.
 - [ ] Derechos televisivos.
 - [ ] Patrocinadores negociables.
 - [ ] Mejoras de instalaciones.
