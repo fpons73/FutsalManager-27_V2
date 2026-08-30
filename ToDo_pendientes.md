@@ -103,6 +103,7 @@
 - [ ] Atajos de teclado.
 - [ ] Soporte mejorado para lectores de pantalla.
 - [ ] Tutorial y onboarding inicial.
+- [x] Menú inicial visual con fondo de pabellón, acciones principales y acceso al Editor.
 - [ ] Ayuda contextual dentro del juego.
 
 ## Prioridad 9 — Rendimiento y distribución

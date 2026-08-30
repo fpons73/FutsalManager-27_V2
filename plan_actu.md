@@ -127,6 +127,11 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - [x] Exponer visualmente el desenlace de prórroga y penaltis en calendario y resumen.
 - [x] Verificar build, typecheck y tests.
 
+## Último hito visual
+
+- [x] Menú inicial rediseñado con fondo de pabellón, acciones principales y acceso directo al Editor.
+- [x] Mantener separación entre Editor sin partida y navegación durante la partida.
+
 ## Criterios de aceptación de las próximas iteraciones
 
 - Ninguna acción importante se pierde al cerrar o cambiar de pantalla.

@@ -11,3 +11,14 @@ body { @apply bg-fm-bg text-fm-text antialiased; background-image: radial-gradie
 button, select, input { transition: border-color .18s ease, background-color .18s ease, color .18s ease, transform .18s ease; }
 button:active { transform: translateY(1px); }
 
+.start-menu-bg { background: linear-gradient(180deg, rgba(4,18,32,.28), rgba(3,10,18,.82)), url('/stadium-bg.svg') center/cover; filter: saturate(1.08); }
+.menu-action { display:grid; grid-template-columns:1fr auto; gap:.15rem 1rem; width:100%; margin:.35rem 0; padding:.85rem 1rem; border:1px solid rgba(255,255,255,.45); border-radius:.75rem; background:linear-gradient(100deg,rgba(255,255,255,.96),rgba(222,235,244,.9)); color:#071522; text-align:left; box-shadow:0 5px 16px rgba(0,0,0,.2); }
+.menu-action:hover { border-color:#67e8f9; background:#e9fbff; transform:translateX(3px); }
+.menu-action span { font-size:1.15rem; font-weight:900; letter-spacing:.02em; }
+.menu-action b { grid-row:span 2; align-self:center; color:#087ea1; font-size:1.65rem; }
+.menu-action small { color:#475569; font-size:.72rem; }
+.menu-primary { border-color:#67e8f9; background:linear-gradient(100deg,#082f49,#0e7490); color:white; }
+.menu-primary small { color:#bae6fd; }
+.menu-primary b { color:#67e8f9; }
+.menu-foot { border:1px solid rgba(255,255,255,.3); border-radius:.55rem; background:rgba(255,255,255,.9); padding:.5rem .3rem; color:#172033; font-size:.72rem; font-weight:700; }
+

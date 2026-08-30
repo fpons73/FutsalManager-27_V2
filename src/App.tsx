@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "./store";
 import { api } from "./api";
 import NewGame from "./components/screens/NewGame";
+import StartMenu from "./components/screens/StartMenu";
 import Dashboard from "./components/screens/Dashboard";
 import SquadView from "./components/screens/SquadView";
 import StandingsView from "./components/screens/StandingsView";
@@ -50,6 +51,7 @@ function MatchFlow() {
 
 export default function App() {
   const { screen, gameState } = useStore();
+  if (!gameState && (screen as string) === "newgame") return <StartMenu />;
   if ((screen as string) === "editor" && !gameState) return <div className="min-h-screen bg-fm-bg"><EditorView /></div>;
   return <Shell>
     {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{(screen as string) === "board" && <BoardView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
