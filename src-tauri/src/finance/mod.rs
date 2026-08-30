@@ -1,5 +1,6 @@
 use serde::Serialize;
 use sqlx::SqlitePool;
+use chrono::NaiveDate;
 
 #[derive(Serialize, Clone)]
 pub struct FinanceRow {
@@ -24,6 +25,9 @@ pub struct FinanceRow {
     pub merchandise_revenue: f64,
     pub merchandise_units: i64,
     pub merchandise_demand: i64,
+    pub tv_weekly_income: f64,
+    pub tv_broadcaster: Option<String>,
+    pub tv_contract_end: Option<String>,
 }
 
 pub async fn get_finance(pool: &SqlitePool, club_id: i64) -> Result<FinanceRow, String> {
@@ -37,7 +41,8 @@ pub async fn get_finance(pool: &SqlitePool, club_id: i64) -> Result<FinanceRow, 
     let staff: (f64, i64) = sqlx::query_as("SELECT COALESCE(weekly_cost,0), COALESCE(staff_count,0) FROM club_staff_costs WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0.0, 0));
     let travel: (f64, i64) = sqlx::query_as("SELECT COALESCE(travel_spend,0), COALESCE(away_matches,0) FROM club_travel_finance WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0.0, 0));
     let merch: (f64, i64, i64) = sqlx::query_as("SELECT COALESCE(total_revenue,0), COALESCE(total_units,0), COALESCE(demand,50) FROM club_merchandising WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0.0, 0, 50));
-    Ok(FinanceRow { club_id, club_name: row.0, balance: row.1, transfer_budget: row.2, wage_budget: row.3, total_wages: row.4, sponsorship: row.5, ticket_income: row.6, prize_money: row.7, weekly_wages: weekly, monthly_balance: monthly, stadium_condition, stadium_weekly_cost, stadium_name, staff_weekly_cost: staff.0, staff_count: staff.1, travel_spend: travel.0, away_matches: travel.1, merchandise_revenue: merch.0, merchandise_units: merch.1, merchandise_demand: merch.2 })
+    let tv: (String, f64, String) = sqlx::query_as("SELECT broadcaster, weekly_amount, end_date FROM tv_rights_contracts WHERE club_id=? AND status='active' ORDER BY id DESC LIMIT 1").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or(("Sin contrato".into(), 0.0, "—".into()));
+    Ok(FinanceRow { club_id, club_name: row.0, balance: row.1, transfer_budget: row.2, wage_budget: row.3, total_wages: row.4, sponsorship: row.5, ticket_income: row.6, prize_money: row.7, weekly_wages: weekly, monthly_balance: monthly, stadium_condition, stadium_weekly_cost, stadium_name, staff_weekly_cost: staff.0, staff_count: staff.1, travel_spend: travel.0, away_matches: travel.1, merchandise_revenue: merch.0, merchandise_units: merch.1, merchandise_demand: merch.2, tv_weekly_income: tv.1, tv_broadcaster: Some(tv.0), tv_contract_end: Some(tv.2) })
 }
 
 pub async fn process_stadium_operations(pool: &SqlitePool) -> Result<(), String> { let rows:Vec<(i64,i64,f64)>=sqlx::query_as("SELECT so.stadium_id,so.condition,so.weekly_cost FROM stadium_operations so JOIN clubs c ON c.stadium_id=so.stadium_id").fetch_all(pool).await.map_err(|e|e.to_string())?;let(date,):(String,)=sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e|e.to_string())?;for(stadium,condition,cost)in rows{let club:Option<(i64,)>=sqlx::query_as("SELECT id FROM clubs WHERE stadium_id=?").bind(stadium).fetch_optional(pool).await.map_err(|e|e.to_string())?;if let Some((club_id,))=club{sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(cost).bind(club_id).execute(pool).await.map_err(|e|e.to_string())?;sqlx::query("UPDATE stadium_operations SET condition=MAX(0,condition-1),last_maintenance=? WHERE stadium_id=?").bind(&date).bind(stadium).execute(pool).await.map_err(|e|e.to_string())?;if condition<=30{let _=sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'board','Mantenimiento urgente','El pabellón necesita mantenimiento para evitar pérdida de ingresos.',?,1)").bind(club_id).bind(&date).execute(pool).await;}}}Ok(())}
@@ -51,6 +56,16 @@ pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
         sqlx::query("INSERT INTO club_staff_costs(club_id,weekly_cost,staff_count,updated_at) VALUES(?,?,?,?) ON CONFLICT(club_id) DO UPDATE SET weekly_cost=excluded.weekly_cost,staff_count=excluded.staff_count,updated_at=excluded.updated_at")
             .bind(cid).bind(staff.0).bind(staff.1).bind(&today.0).execute(pool).await.map_err(|e| e.to_string())?;
         let weekly_cost = wages + staff.0;
+        let (today_date,) = (today.0.clone(),);
+        let tv_contract: Option<(i64, f64, String, String)> = sqlx::query_as("SELECT id, weekly_amount, end_date, broadcaster FROM tv_rights_contracts WHERE club_id=? AND status='active' AND start_date<=? AND end_date>=? ORDER BY id DESC LIMIT 1").bind(cid).bind(&today_date).bind(&today_date).fetch_optional(pool).await.map_err(|e| e.to_string())?;
+        let mut tv_income = 0.0;
+        if let Some((contract_id, weekly_amount, end_date, broadcaster)) = tv_contract {
+            let payment = sqlx::query("INSERT INTO tv_rights_payments(contract_id,club_id,week_date,amount) VALUES(?,?,?,?) ON CONFLICT(contract_id,week_date) DO NOTHING").bind(contract_id).bind(cid).bind(&today_date).bind(weekly_amount).execute(pool).await.map_err(|e| e.to_string())?;
+            if payment.rows_affected() > 0 { tv_income = weekly_amount; }
+            if (NaiveDate::parse_from_str(&end_date, "%Y-%m-%d").ok().map(|d| d.signed_duration_since(NaiveDate::parse_from_str(&today_date, "%Y-%m-%d").unwrap()).num_days()).unwrap_or(999)) <= 60 {
+                let _ = sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'commercial','Derechos televisivos próximos a vencer',? ,?,1)").bind(cid).bind(format!("El contrato con {} vence el {}. Negocia una renovación para no perder ingresos.", broadcaster, end_date)).bind(&today_date).execute(pool).await;
+            }
+        }
         sqlx::query("INSERT OR IGNORE INTO club_merchandising(club_id) VALUES(?)").bind(cid).execute(pool).await.map_err(|e| e.to_string())?;
         let (reputation,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(cid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let demand = (reputation / 10 + 35).clamp(10, 100);
@@ -61,8 +76,8 @@ pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
             .bind(cid).bind(&today.0).bind(units).bind(price).bind(revenue).execute(pool).await.map_err(|e| e.to_string())?;
         sqlx::query("UPDATE club_merchandising SET demand=?,total_units=total_units+?,total_revenue=total_revenue+?,updated_at=? WHERE club_id=?")
             .bind(demand).bind(if sale.rows_affected() > 0 { units } else { 0 }).bind(if sale.rows_affected() > 0 { revenue } else { 0.0 }).bind(&today.0).bind(cid).execute(pool).await.map_err(|e| e.to_string())?;
-        sqlx::query("UPDATE club_finances SET balance=balance-?+? WHERE club_id=?")
-            .bind(weekly_cost).bind(if sale.rows_affected() > 0 { revenue } else { 0.0 }).bind(cid).execute(pool).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE club_finances SET balance=balance-?+?+? WHERE club_id=?")
+            .bind(weekly_cost).bind(if sale.rows_affected() > 0 { revenue } else { 0.0 }).bind(tv_income).bind(cid).execute(pool).await.map_err(|e| e.to_string())?;
 
         // Low balance warning
         let (bal,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(cid).fetch_one(pool).await.map_err(|e| e.to_string())?;

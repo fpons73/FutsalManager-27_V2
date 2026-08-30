@@ -85,7 +85,7 @@
 - [x] Mantenimiento del pabellón con coste operativo semanal, deterioro, alertas y estado visible en Finanzas.
 - [x] Costes detallados de personal y staff, con desglose semanal visible en Finanzas.
 - [x] Merchandising con demanda por reputación, ventas semanales, ingresos persistentes y métricas visibles en Finanzas.
-- [ ] Derechos televisivos.
+- [x] Derechos televisivos con contratos, ingresos semanales, vencimientos y alertas.
 - [ ] Patrocinadores negociables.
 - [ ] Mejoras de instalaciones.
 - [ ] Demanda dinámica y precios de entradas.
