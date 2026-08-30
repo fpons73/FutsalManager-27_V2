@@ -38,3 +38,9 @@ INSERT OR IGNORE INTO sponsorship_contracts(club_id,sponsor_name,weekly_amount,s
 SELECT c.id, 'Velocity Sportswear', MAX(180.0,c.reputation*1.8), MAX(500.0,c.reputation*4.0), 'league_position', 8,
        COALESCE((SELECT game_date FROM game_state WHERE id=1),'2026-07-10'), '2027-06-30'
 FROM clubs c;
+
+INSERT INTO sponsorship_offers(club_id,sponsor_name,weekly_amount,signing_bonus,target_type,target_value,duration_weeks,expires_date)
+SELECT c.id, 'CourtVision Energy', MAX(220.0,c.reputation*2.1), MAX(750.0,c.reputation*5.0), 'league_position', 6, 52,
+       date(COALESCE((SELECT game_date FROM game_state WHERE id=1),'2026-07-10'), '+30 day')
+FROM clubs c
+WHERE NOT EXISTS (SELECT 1 FROM sponsorship_offers o WHERE o.club_id=c.id AND o.status='available');

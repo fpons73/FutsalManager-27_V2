@@ -72,6 +72,8 @@ pub fn run() {
       commands::training_cmd::get_training_types,
       commands::training_cmd::get_staff_impact,
       commands::finance_cmd::get_finance,
+      commands::finance_cmd::get_sponsorship_offers,
+      commands::finance_cmd::accept_sponsorship_offer,
       commands::finance_cmd::get_injuries,
       commands::season_cmd::check_season_finished,
       commands::season_cmd::rollover_season_cmd,
