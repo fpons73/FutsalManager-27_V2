@@ -14,6 +14,7 @@ import ScoutingView from "./components/screens/ScoutingView";
 import InboxView from "./components/screens/InboxView";
 import TrainingView from "./components/screens/TrainingView";
 import FinanceView from "./components/screens/FinanceView";
+import CommercialView from "./components/screens/CommercialView";
 import EditorView from "./components/screens/EditorView";
 import YouthView from "./components/screens/YouthView";
 import SeasonMovements from "./components/screens/SeasonMovements";
@@ -55,6 +56,6 @@ export default function App() {
   if ((screen as string) === "editor" && !gameState) return <div className="min-h-screen bg-fm-bg"><EditorView /></div>;
   if (!gameState && (screen as string) === "saves") return <SavesView />;
   return <Shell>
-    {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{(screen as string) === "board" && <BoardView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
+    {screen === "newgame" && <NewGame />}{screen === "dashboard" && <Dashboard />}{screen === "squad" && <SquadView />}{screen === "standings" && <StandingsView />}{(screen as string) === "statistics" && <StatisticsView />}{(screen as string) === "records" && <RecordsView />}{(screen as string) === "national-teams" && <NationalTeamsView />}{screen === "fixtures" && <FixturesView />}{screen === "tactics" && <MatchFlow />}{screen === "market" && <MarketView />}{screen === "scouting" && <ScoutingView />}{screen === "inbox" && <InboxView />}{screen === "training" && <TrainingView />}{screen === "youth" && <YouthView />}{screen === "finance" && <FinanceView />}{screen === "commercial" && <CommercialView />}{(screen as string) === "board" && <BoardView />}{(screen as string) === "movements" && <SeasonMovements />}{(screen as string) === "honours" && <HonoursView />}{screen === "saves" && <SavesView />}{(screen as string) === "editor" && <EditorView />}
   </Shell>;
 }

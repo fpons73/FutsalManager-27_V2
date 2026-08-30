@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ClubRow, CompRow, GameStateRow } from "./api";
 
-type Screen = "home" | "newgame" | "dashboard" | "squad" | "standings" | "fixtures" | "tactics" | "market" | "scouting" | "inbox" | "training" | "youth" | "finance" | "saves" | "editor";
+type Screen = "home" | "newgame" | "dashboard" | "squad" | "standings" | "fixtures" | "tactics" | "market" | "scouting" | "inbox" | "training" | "youth" | "finance" | "commercial" | "saves" | "editor";
 
 interface AppStore {
   screen: Screen;
