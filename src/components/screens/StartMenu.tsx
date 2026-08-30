@@ -14,9 +14,9 @@ export default function StartMenu() {
         <div className="rounded-xl border border-white/20 bg-slate-950/50 px-4 py-2 text-right text-xs backdrop-blur"><div className="font-bold text-cyan-200">FUTSAL MANAGER 27</div><div className="text-white/60">v1.0.3</div></div>
       </header>
       <div className="flex flex-1 items-center py-8"><section className="w-full max-w-md rounded-2xl border border-cyan-300/50 bg-slate-950/60 p-3 shadow-2xl shadow-cyan-950/50 backdrop-blur-md">
-        {hasSave && <button onClick={()=>setScreen("saves")} className="menu-action menu-primary"><span>CONTINUAR PARTIDA</span><b>▶</b><small>Continuar tu carrera guardada</small></button>}
+        <button onClick={()=>setScreen("saves")} className="menu-action menu-primary"><span>CONTINUAR PARTIDA</span><b>▶</b><small>{hasSave ? "Retomar la última carrera guardada" : "No hay una partida guardada todavía"}</small></button>
         <button onClick={()=>setScreen("newgame")} className="menu-action"><span>NUEVA PARTIDA</span><b>✦</b><small>Comenzar una nueva carrera</small></button>
-        {hasSave && <button onClick={()=>setScreen("saves")} className="menu-action"><span>CARGAR PARTIDA</span><b>▰</b><small>Gestionar partidas guardadas</small></button>}
+        <button onClick={()=>setScreen("saves")} className="menu-action"><span>CARGAR PARTIDA</span><b>▰</b><small>{hasSave ? "Gestionar partidas guardadas" : "Todavía no hay partidas guardadas"}</small></button>
         <button onClick={()=>setScreen("editor")} className="menu-action"><span>EDITOR</span><b>⚙</b><small>Editar la base de datos antes de jugar</small></button>
         <button onClick={()=>alert("Los ajustes estarán disponibles próximamente.")} className="menu-action"><span>AJUSTES</span><b>⚙</b><small>Preferencias de juego</small></button>
         <button onClick={()=>window.close()} className="menu-action"><span>SALIR</span><b>⏻</b><small>Cerrar Futsal Manager 27</small></button>

@@ -16,6 +16,7 @@ interface AppStore {
   setCompetitions: (c: CompRow[]) => void;
   setSelectedComp: (id: number | null) => void;
   setUserClub: (id: number | null) => void;
+  resetSession: () => void;
 }
 
 export const useStore = create<AppStore>((set) => ({
@@ -31,4 +32,5 @@ export const useStore = create<AppStore>((set) => ({
   setCompetitions: (competitions) => set({ competitions }),
   setSelectedComp: (selectedComp) => set({ selectedComp }),
   setUserClub: (userClubId) => set({ userClubId }),
+  resetSession: () => set({ gameState: null, userClubId: null, clubs: [], competitions: [], selectedComp: null, screen: "newgame" }),
 }));

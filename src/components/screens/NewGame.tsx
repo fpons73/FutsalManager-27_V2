@@ -60,6 +60,7 @@ export default function NewGame() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
+      <button onClick={()=>setScreen("newgame")} className="mb-4 rounded-lg border border-fm-border px-3 py-1.5 text-sm text-fm-dim hover:text-white">← Volver al menú principal</button>
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-black tracking-tight"><span className="text-fm-accent">FUTSAL</span> MANAGER 27</h1>
         <p className="mt-2 text-fm-dim">Elige un proyecto y construye tu dinastía de futsal en la temporada 2026/27</p>
