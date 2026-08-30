@@ -183,6 +183,9 @@ pub async fn new_game(state: State<'_, AppState>, user_club_id: Option<i64>) -> 
         let mut live = state.live_match.lock().map_err(|e| e.to_string())?;
         *live = None;
     }
+    // Una nueva partida siempre parte de una base vacía. Cerramos las conexiones
+    // anteriores antes de borrar el archivo para que Windows no conserve el WAL.
+    // La operación queda aislada del pool que usa la pantalla de selección.
     // Pequeña espera para que SQLite cierre ficheros en Windows
     tokio::time::sleep(std::time::Duration::from_millis(120)).await;
     let path = crate::db::db_path();

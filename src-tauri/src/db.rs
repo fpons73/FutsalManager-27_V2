@@ -2,6 +2,12 @@ use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+static MIGRATION_MUTEX: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn migration_mutex() -> &'static tokio::sync::Mutex<()> {
+    MIGRATION_MUTEX.get_or_init(|| tokio::sync::Mutex::new(()))
+}
+
 #[allow(dead_code)]
 static POOL: OnceLock<SqlitePool> = OnceLock::new();
 
@@ -37,6 +43,10 @@ pub async fn init_pool(path: Option<PathBuf>) -> Result<SqlitePool, sqlx::Error>
     sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await?;
     sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
     ensure_legacy_schema(&pool).await?;
+    // SQLx no permite ejecutar migraciones concurrentemente contra la misma base.
+    // Serializamos el tramo de migración en el proceso y dejamos que SQLx valide
+    // siempre el historial real de la base, sin reparar ni borrar registros.
+    let _migration_guard = migration_mutex().lock().await;
     sqlx::migrate!("./migrations").run(&pool).await.map_err(|e| {
         eprintln!("migration error: {e}");
         sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))

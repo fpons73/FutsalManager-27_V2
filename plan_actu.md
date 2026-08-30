@@ -134,6 +134,13 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 
 - [x] Registrar viajes visitantes por partido con distancia estimada, coste, acumulado financiero y protección contra doble cargo.
 
+## Último hito: recuperación de Nueva partida
+
+- [x] Evitar doble inicialización del mundo desde React.
+- [x] Mantener el historial SQLx de migraciones sin alterar versiones aplicadas.
+- [x] Integrar el fondo real proporcionado en `public/start-background.png`.
+- [x] Validar build frontend y compilación Tauri.
+
 ## Último hito visual
 
 - [x] Adaptar el menú inicial al Libro de Estilos: fondo inmersivo, panel glass, jerarquía de botones, azul eléctrico/cian y Editor visible antes de la partida.

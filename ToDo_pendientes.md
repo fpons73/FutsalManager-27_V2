@@ -1,5 +1,12 @@
 # FUTSAL MANAGER 27 — Pendientes reales del PRD
 
+## Hito actual — Recuperación de Nueva partida y menú visual
+- [x] Evitar inicializaciones concurrentes desde la pantalla de nueva partida.
+- [x] Mantener migraciones SQLx históricas coherentes.
+- [x] Usar `public/start-background.png` como fondo real del menú.
+- [x] Verificar compilación del flujo de nueva partida.
+
+
 > Documento de control para los siguientes hitos. Solo incluye trabajo pendiente o parcialmente implementado.
 
 ## Prioridad 1 — Profundidad deportiva
