@@ -261,11 +261,17 @@ async fn update_standings(pool: &SqlitePool, comp_id: i64, hid: i64, aid: i64, h
 async fn recompute_positions(pool: &SqlitePool) -> Result<(), String> {
     let comps: Vec<(i64, String)> = sqlx::query_as("SELECT id, tiebreak_rule FROM competitions").fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (cid, rule) in comps {
-        let order = crate::competition::rules::order_clause(&rule);
-        let rows: Vec<(i64, i64, i64, i64)> = sqlx::query_as(&format!("SELECT club_id, points, goal_difference, goals_for FROM league_standings WHERE competition_id={} ORDER BY {}", cid, order)).fetch_all(pool).await.map_err(|e| e.to_string())?;
-        for (pos, (club_id, _, _, _)) in rows.iter().enumerate() {
+        let rows: Vec<(i64, i64, i64, i64)> = sqlx::query_as(&format!("SELECT club_id, points, goal_difference, goals_for FROM league_standings WHERE competition_id={} ORDER BY {}", cid, crate::competition::rules::order_clause(&rule))).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        let ordered_ids = if rule == "points_head_to_head" {
+            let season: (String,) = sqlx::query_as("SELECT season FROM competitions WHERE id=?").bind(cid).fetch_one(pool).await.map_err(|e| e.to_string())?;
+            let played: Vec<(i64, i64, i64, i64)> = sqlx::query_as("SELECT home_club_id, away_club_id, home_score, away_score FROM matches WHERE competition_id=? AND season=? AND status='finished'").bind(cid).bind(season.0).fetch_all(pool).await.map_err(|e| e.to_string())?;
+            crate::competition::rules::head_to_head_order(&rows, &played)
+        } else {
+            rows.iter().map(|entry| entry.0).collect()
+        };
+        for (pos, club_id) in ordered_ids.iter().enumerate() {
             sqlx::query("UPDATE league_standings SET position=? WHERE competition_id=? AND club_id=?")
-                .bind((pos + 1) as i64).bind(cid).bind(club_id)
+                .bind((pos + 1) as i64).bind(cid).bind(*club_id)
                 .execute(pool).await.map_err(|e| e.to_string())?;
         }
     }

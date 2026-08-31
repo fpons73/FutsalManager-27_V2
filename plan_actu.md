@@ -161,4 +161,5 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - El usuario puede tomar decisiones tácticas durante el partido y ver sus efectos.
 - La información de mercado depende progresivamente del scouting.
 - Las competiciones distintas de liga tienen reglas y fases propias.
+- El desempate por enfrentamiento directo usa resultados persistidos entre equipos empatados y conserva criterios generales como respaldo.
 - Cada hito incluye tests automatizados y actualización de este documento.
