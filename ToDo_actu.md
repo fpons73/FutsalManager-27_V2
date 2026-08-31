@@ -133,6 +133,14 @@
 - [ ] Revisar accesibilidad, navegación por teclado y contraste.
 - [ ] Validar estados de carga, error y vacío.
 
+## Hito IA — Portero-jugador estratégico
+
+- [x] Activación automática del portero-jugador en el tramo final cuando la IA va perdiendo.
+- [x] Selección del jugador de campo con mejor pase, visión y técnica.
+- [x] Retorno automático del portero al igualarse o cambiar el marcador.
+- [x] Eventos de activación y desactivación visibles en el partido.
+- [x] Prueba de regresión del ciclo completo.
+
 ## Hito IA — Rotaciones inteligentes
 
 - [x] Sustituciones automáticas de la IA según fatiga, marcador, rol y atributos.

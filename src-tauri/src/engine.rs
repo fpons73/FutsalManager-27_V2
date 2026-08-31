@@ -487,15 +487,7 @@ impl MatchEngine {
 
         self.apply_automation_if_needed();
 
-        let losing_powerplay = self.time > self.rules.total_seconds - 180;
-        if losing_powerplay {
-            for t in 0..2 {
-                let other = 1 - t;
-                if self.score[t] < self.score[other] && self.allow_powerplay[t] {
-                    self.powerplay[t] = true;
-                }
-            }
-        }
+        self.update_powerplay_state();
 
         self.update_movement(1.0);
         self.update_stamina(1.0);
@@ -516,6 +508,48 @@ impl MatchEngine {
         }
 
         new_events
+    }
+
+    fn update_powerplay_state(&mut self) {
+        for team in 0..2 {
+            let other = 1 - team;
+            let should_use = self.allow_powerplay[team]
+                && self.time >= self.rules.total_seconds.saturating_sub(180)
+                && self.score[team] < self.score[other];
+            if should_use && !self.powerplay[team] {
+                self.powerplay[team] = true;
+                self.activate_powerplay(team);
+            } else if !should_use && self.powerplay[team] {
+                self.powerplay[team] = false;
+                self.restore_goalkeeper(team);
+            }
+        }
+    }
+
+    fn activate_powerplay(&mut self, team: usize) {
+        let gk = self.on_pitch_ids[team].iter().copied().find(|id| self.players.iter().any(|p| p.id == *id && p.is_gk));
+        let Some(gk_id) = gk else { return; };
+        let replacement = self.bench[team].iter().copied().filter(|id| self.players.iter().any(|p| p.id == *id && !p.is_gk)).max_by(|a, b| {
+            let value = |id: u32| self.players.iter().find(|p| p.id == id).map(|p| p.attrs.passing + p.attrs.vision + p.attrs.technique).unwrap_or(0.0);
+            value(*a).partial_cmp(&value(*b)).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let Some(in_id) = replacement else { return; };
+        if let Some(pos) = self.bench[team].iter().position(|id| *id == in_id) { self.bench[team].remove(pos); }
+        self.bench[team].push(gk_id);
+        if let Some(pos) = self.on_pitch_ids[team].iter().position(|id| *id == gk_id) { self.on_pitch_ids[team][pos] = in_id; }
+        for p in &mut self.players {
+            if p.id == gk_id { p.on_pitch = false; }
+            if p.id == in_id { p.on_pitch = true; p.stamina_now = 95.0; p.x = if team == 0 { 28.0 } else { 12.0 }; p.y = 10.0; }
+        }
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"powerplay_on".into(), team_id:team as u32, player_id:Some(in_id), assist_player_id:None, description:"Portero-jugador: superioridad ofensiva".into(), x:self.ball_x, y:self.ball_y });
+    }
+
+    fn restore_goalkeeper(&mut self, team: usize) {
+        let out_id = self.on_pitch_ids[team].iter().copied().find(|id| self.players.iter().any(|p| p.id == *id && !p.is_gk));
+        let gk_id = self.bench[team].iter().copied().find(|id| self.players.iter().any(|p| p.id == *id && p.is_gk));
+        let (Some(out_id), Some(gk_id)) = (out_id, gk_id) else { return; };
+        self.manual_substitution(team, out_id, gk_id).ok();
+        self.events.push(MatchEvent { minute:self.time/60, second:self.time%60, kind:"powerplay_off".into(), team_id:team as u32, player_id:Some(gk_id), assist_player_id:None, description:"Vuelve el portero titular".into(), x:self.ball_x, y:self.ball_y });
     }
 
     fn update_movement(&mut self, dt: f32) {
@@ -1186,6 +1220,24 @@ mod tests {
         assert!(eng.bench[0].contains(&selected));
         eng.maybe_substitute();
         assert!(eng.events.iter().any(|e| e.kind == "substitution" && e.team_id == 0));
+    }
+
+    #[test]
+    fn powerplay_uses_outfield_player_and_restores_goalkeeper() {
+        let roster: Vec<(u32,u8,Role,PlayerAttrs)> = (1..=12).map(|i| (i, i as u8, if i == 1 { Role::POR } else { Role::ALA }, mk_attrs(120, Role::ALA))).collect();
+        let mut eng = MatchEngine::new([(0,"A".into(),"#f00".into()), (1,"B".into(),"#00f".into())], [roster.clone(), roster]).with_seed(3);
+        eng.start();
+        eng.score = [0, 1];
+        eng.time = eng.rules.total_seconds - 120;
+        eng.update_powerplay_state();
+        assert!(eng.powerplay[0]);
+        assert!(!eng.players.iter().any(|p| p.id == 1 && p.on_pitch));
+        eng.score = [1, 1];
+        eng.update_powerplay_state();
+        assert!(!eng.powerplay[0]);
+        assert!(eng.players.iter().any(|p| p.id == 1 && p.on_pitch));
+        assert!(eng.events.iter().any(|e| e.kind == "powerplay_on"));
+        assert!(eng.events.iter().any(|e| e.kind == "powerplay_off"));
     }
 
     #[test]

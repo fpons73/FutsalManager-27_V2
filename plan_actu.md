@@ -128,7 +128,15 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 > Efectos de instalaciones integrados: entrenamiento +8% por nivel, cantera con desarrollo adicional por nivel y área comercial +5 puntos de demanda por nivel, con límites de seguridad.
 - [ ] Añadir controles mínimos de intervención durante el partido.
 
-## Último hito: rotaciones inteligentes de la IA
+## Último hito: portero-jugador estratégico
+
+- [x] Activar el portero-jugador cuando la IA pierde en los últimos minutos.
+- [x] Elegir un jugador de campo por pase, visión y técnica.
+- [x] Restaurar el portero cuando desaparece la situación de desventaja.
+- [x] Registrar activación y retorno como eventos.
+- [x] Validar el ciclo con una prueba del motor.
+
+## Hito anterior: rotaciones inteligentes de la IA
 
 - [x] Sustituciones automáticas según fatiga, marcador, rol y atributos.
 - [x] Selección contextual de jugadores del banquillo.
