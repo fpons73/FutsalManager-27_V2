@@ -71,6 +71,28 @@ async fn generate_next_cup_round(pool: &SqlitePool, comp_id: i64, season: &str) 
     Ok(())
 }
 
+async fn normalize_scheduled_calendar(pool: &SqlitePool) -> Result<(), String> {
+    let rows: Vec<(i64, String, i64, i64, i64)> = sqlx::query_as(
+        "SELECT id,date,home_club_id,away_club_id,competition_id FROM matches WHERE status='scheduled' ORDER BY date,id"
+    ).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    let mut occupied: std::collections::HashMap<i64, Vec<NaiveDate>> = Default::default();
+    for (match_id, date, home, away, _competition_id) in rows {
+        let mut candidate = NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+        loop {
+            let blocked = [home, away].iter().any(|club| occupied.get(club).map(|dates| dates.iter().any(|used| (*used - candidate).num_days().abs() < 3)).unwrap_or(false));
+            if !blocked { break; }
+            candidate += chrono::Duration::days(1);
+        }
+        let normalized = candidate.format("%Y-%m-%d").to_string();
+        if normalized != date {
+            sqlx::query("UPDATE matches SET date=? WHERE id=?").bind(&normalized).bind(match_id).execute(pool).await.map_err(|e| e.to_string())?;
+        }
+        occupied.entry(home).or_default().push(candidate);
+        occupied.entry(away).or_default().push(candidate);
+    }
+    Ok(())
+}
+
 pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
     generate_group_stages(pool).await?;
     // Las competiciones de copa se generan como eliminatorias de partido único.
@@ -146,6 +168,7 @@ pub async fn generate_calendars(pool: &SqlitePool) -> Result<(), String> {
             }
         }
     }
+    normalize_scheduled_calendar(pool).await?;
     Ok(())
 }
 
@@ -217,6 +240,16 @@ mod tests {
         let (distinct_rounds,): (i64,) = sqlx::query_as("SELECT COUNT(DISTINCT round) FROM matches WHERE competition_id=(SELECT id FROM competitions WHERE name='Primera División de Fútbol Sala')")
             .fetch_one(&pool).await.unwrap();
         assert_eq!(distinct_rounds, 30);
+    }
+
+    #[tokio::test]
+    async fn normalized_calendar_avoids_club_conflicts() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        sqlx::query("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,status) SELECT competition_id,season,99,date,home_club_id,away_club_id,'scheduled' FROM matches LIMIT 1").execute(&pool).await.unwrap();
+        normalize_scheduled_calendar(&pool).await.unwrap();
+        let conflicts: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches a JOIN matches b ON a.id<b.id AND a.status='scheduled' AND b.status='scheduled' AND a.date=b.date AND (a.home_club_id=b.home_club_id OR a.home_club_id=b.away_club_id OR a.away_club_id=b.home_club_id OR a.away_club_id=b.away_club_id)").fetch_one(&pool).await.unwrap();
+        assert_eq!(conflicts.0, 0);
     }
 
     #[tokio::test]

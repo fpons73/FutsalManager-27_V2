@@ -13,7 +13,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 ### Implementado
 
 - Mundo procedural amplio: naciones, confederaciones, clubes, divisiones y miles de jugadores.
-- Calendarios de liga ida/vuelta, clasificación y avance diario/semanal; generación inicial corregida para incluir solo ligas de clubes inscritas, verificada desde la primera jornada, con estadísticas básicas persistidas, protección contra doble contabilización y estados de interfaz robustos y selección del próximo partido limitada a fechas vigentes.
+- Calendarios de liga ida/vuelta, clasificación y avance diario/semanal; generación inicial corregida para incluir solo ligas de clubes inscritas, verificada desde la primera jornada, con normalización anti-solapamiento de 48 horas, estadísticas básicas persistidas, protección contra doble contabilización y estados de interfaz robustos.
 - Motor 2D Rust con campo 40×20, 2×20 minutos, fatiga, cambios, faltas acumuladas, doble penalti y powerplay.
 - Tácticas prepartido: formaciones 3-1, 4-0, 2-2, 5-0, tempo, presión, línea defensiva, amplitud y quintero.
 - Mercado, ofertas bidireccionales, valoración y bandeja de entrada.
@@ -134,6 +134,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - [x] Mejoras de instalaciones: niveles persistentes para entrenamiento, cantera y área comercial, compra transaccional con comprobación de saldo, efectos reales sobre progreso/demanda y actualización visible en Finanzas.
 - [x] Taquilla dinámica: precio configurable, demanda según rival/competición/estado del pabellón y registro idempotente de asistencia e ingresos por partido.
 - [x] Reputación económica: resultados y fuerza relativa del rival modifican la reputación del club una sola vez por partido, afectando la demanda futura.
+- [x] Calendario anti-solapamiento: los partidos programados respetan una separación mínima de 48 horas por club.
 
 - [x] Merchandising con demanda, ventas semanales, ingresos acumulados y métricas visibles en Finanzas.
 
