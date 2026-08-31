@@ -236,6 +236,7 @@ pub struct MatchEngine {
     pub allow_powerplay: [bool; 2],
     pub automation: [Option<EngineAutomation>; 2],
     pub automation_applied: [bool; 2],
+    reactive_last_time: [u32; 2],
     pub timeouts_used: [u8; 2],
     pub timeout_until: u32,
     on_pitch_ids: [Vec<u32>; 2],
@@ -300,6 +301,7 @@ impl MatchEngine {
             allow_powerplay: [true, true],
             automation: [None, None],
             automation_applied: [false, false],
+            reactive_last_time: [0, 0],
             timeouts_used: [0, 0],
             timeout_until: 0,
             on_pitch_ids: on_pitch,
@@ -351,6 +353,38 @@ impl MatchEngine {
                 self.events.push(MatchEvent { minute:self.time/60, second:self.time%60,kind: "tactical_automation".into(), team_id:team as u32, player_id:None, assist_player_id:None, description:"Automatismo táctico activado".into(), x:20.0, y:10.0 });
             }
         }
+    }
+
+    /// Toma decisiones de banquillo para un equipo no controlado por el usuario.
+    /// Se evalúa por intervalos para evitar cambios nerviosos y conserva la táctica
+    /// manual/configurada cuando no existe una situación clara.
+    pub fn apply_reactive_ai(&mut self, team: usize) {
+        if team > 1 || self.state == MatchState::Finished || self.time < 300 || self.time.saturating_sub(self.reactive_last_time[team]) < 120 { return; }
+        let other = 1 - team;
+        let losing = self.score[team] < self.score[other];
+        let winning = self.score[team] > self.score[other];
+        let late = self.time >= self.rules.total_seconds * 2 / 3;
+        let average_stamina = {
+            let values: Vec<f32> = self.players.iter().filter(|p| p.team_id == team as u32 && p.on_pitch).map(|p| p.stamina_now).collect();
+            if values.is_empty() { 100.0 } else { values.iter().sum::<f32>() / values.len() as f32 }
+        };
+        let overloaded = self.fouls[team] >= self.rules.fouls_for_double.saturating_sub(1);
+        let desired = if late && losing {
+            EngineTactics { formation: 3, tempo: 88.0, pressing: 82.0, defensive_line: 72.0, width: 68.0 }
+        } else if late && winning {
+            EngineTactics { formation: 2, tempo: 34.0, pressing: 42.0, defensive_line: 35.0, width: 45.0 }
+        } else if overloaded {
+            EngineTactics { formation: self.tactics[team].formation, tempo: self.tactics[team].tempo.min(55.0), pressing: self.tactics[team].pressing.min(38.0), defensive_line: self.tactics[team].defensive_line.min(48.0), width: self.tactics[team].width }
+        } else if average_stamina < 62.0 {
+            EngineTactics { formation: self.tactics[team].formation, tempo: self.tactics[team].tempo.min(48.0), pressing: self.tactics[team].pressing.min(50.0), defensive_line: self.tactics[team].defensive_line, width: self.tactics[team].width }
+        } else { return; };
+        let current = self.tactics[team];
+        let changed = current.formation != desired.formation || (current.tempo - desired.tempo).abs() > 8.0 || (current.pressing - desired.pressing).abs() > 8.0 || (current.defensive_line - desired.defensive_line).abs() > 8.0;
+        self.reactive_last_time[team] = self.time;
+        if !changed { return; }
+        self.tactics[team] = desired;
+        self.reset_positions();
+        self.events.push(MatchEvent { minute: self.time / 60, second: self.time % 60, kind: "reactive_tactical_change".into(), team_id: team as u32, player_id: None, assist_player_id: None, description: if late && losing { "IA: arriesga con presión y ataque".into() } else if late && winning { "IA: protege la ventaja".into() } else if overloaded { "IA: modera la presión por faltas".into() } else { "IA: reduce el ritmo por fatiga".into() }, x: 20.0, y: 10.0 });
     }
 
     pub fn update_live_tactics(&mut self, team: usize, tactics: EngineTactics) -> Result<(), String> {
@@ -685,6 +719,23 @@ impl MatchEngine {
         self.snapshot()
     }
 
+    pub fn simulate_full_reactive(&mut self) -> MatchSnapshot {
+        self.start();
+        while self.state != MatchState::Finished {
+            if self.state == MatchState::HalfTime {
+                self.state = MatchState::SecondHalf;
+                self.half = 2;
+                self.time = self.rules.half_seconds + 1;
+                self.reset_positions();
+                continue;
+            }
+            self.tick();
+            self.apply_reactive_ai(0);
+            self.apply_reactive_ai(1);
+        }
+        self.snapshot()
+    }
+
     pub fn simulate_full_knockout(&mut self) -> MatchSnapshot {
         self.simulate_full_knockout_if(true)
     }
@@ -929,9 +980,20 @@ async fn simulate_clubs_with_context(pool: &sqlx::SqlitePool, home_club: i64, aw
     let mut eng = MatchEngine::new(
         [(0, hn, hc), (1, an, ac)],
         [r1, r2],
-    );
-    if knockout {
-        eng.simulate_full();
+    );        if knockout {
+        eng.start();
+        while eng.state != crate::engine::MatchState::Finished {
+            if eng.state == crate::engine::MatchState::HalfTime {
+                eng.state = crate::engine::MatchState::SecondHalf;
+                eng.half = 2;
+                eng.time = eng.rules.half_seconds + 1;
+                eng.reset_positions();
+                continue;
+            }
+            eng.tick();
+            eng.apply_reactive_ai(0);
+            eng.apply_reactive_ai(1);
+        }
         let resolve_tie = aggregate_before.map(|(prior_home, prior_away)| {
             prior_home + eng.score[1] as i64 == prior_away + eng.score[0] as i64
         }).unwrap_or(eng.score[0] == eng.score[1]);
@@ -945,7 +1007,7 @@ async fn simulate_clubs_with_context(pool: &sqlx::SqlitePool, home_club: i64, aw
         }
         Ok(eng.snapshot())
     } else {
-        Ok(eng.simulate_full())
+        Ok(eng.simulate_full_reactive())
     }
 }
 
@@ -980,6 +1042,22 @@ mod tests {
         assert!(eng.automation_applied[0]);
         assert_eq!(eng.tactics[0].formation, 3);
         assert!(eng.events.iter().any(|e| e.kind == "tactical_automation"));
+    }
+
+    #[test]
+    fn reactive_ai_changes_plan_when_trailing_late() {
+        let roster: Vec<(u32,u8,Role,PlayerAttrs)> = (1..=12).map(|i| (i, i as u8, Role::ALA, mk_attrs(120, Role::ALA))).collect();
+        let mut eng = MatchEngine::new([(0,"A".into(),"#f00".into()),(1,"B".into(),"#00f".into())], [roster.clone(), roster]).with_seed(9);
+        eng.start();
+        eng.score = [0, 2];
+        eng.time = 1700;
+        eng.apply_reactive_ai(0);
+        assert_eq!(eng.tactics[0].formation, 3);
+        assert!(eng.tactics[0].pressing > 75.0);
+        assert!(eng.events.iter().any(|e| e.kind == "reactive_tactical_change" && e.team_id == 0));
+        let before = eng.events.len();
+        eng.apply_reactive_ai(0);
+        assert_eq!(eng.events.len(), before, "la IA no debe cambiar de plan continuamente");
     }
 
     #[test]

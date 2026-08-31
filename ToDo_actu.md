@@ -223,6 +223,7 @@
 - [x] CRUD de pabellones con asociación a clubes y soporte de fotografía.
 - [x] Cantera conectada a la navegación, progreso diario y promociones.
 - [x] Atributos del staff aplicados al rendimiento de sistemas deportivos.
+- [x] IA táctica reactiva: cambios de plan por marcador, tiempo, faltas y fatiga en equipos controlados por la máquina.
 
 ## Hito L — Contratos avanzados
 

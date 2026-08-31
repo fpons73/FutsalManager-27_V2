@@ -26,7 +26,7 @@
 - [x] Jerarquía automática, capitanes y promesas contractuales avanzadas.
 - [x] Conversaciones con jugadores y efectos iniciales sobre moral.
 - [ ] Automatismos tácticos avanzados por contexto y rival.
-- [ ] IA táctica reactiva de los equipos controlados por la máquina.
+- [x] IA táctica reactiva de los equipos controlados por la máquina: ajustes por marcador, fase, faltas y fatiga, con cambios espaciados.
 
 ## Prioridad 2 — Competiciones completas
 

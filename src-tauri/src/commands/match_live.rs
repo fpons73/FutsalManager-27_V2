@@ -388,6 +388,8 @@ pub async fn tick_live(state: State<'_, AppState>, ticks: Option<u32>) -> Result
         let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
         for _ in 0..n {
             eng.tick();
+            // El equipo visitante está controlado por la IA; el local sigue bajo control del usuario.
+            eng.apply_reactive_ai(1);
             if eng.state == crate::engine::MatchState::Finished { break; }
         }
         if eng.state == crate::engine::MatchState::Finished && knockout_decider {
