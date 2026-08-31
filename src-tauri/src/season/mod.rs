@@ -3,21 +3,33 @@ use sqlx::SqlitePool;
 
 pub async fn is_season_finished(pool: &SqlitePool) -> Result<bool, String> {
     let (pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE status='scheduled'").fetch_one(pool).await.map_err(|e| e.to_string())?;
-    Ok(pending == 0)
+    if pending > 0 { return Ok(false); }
+    let (eligible,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM competitions WHERE competition_type='league' AND playoff_places > 0").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if eligible == 0 { return Ok(true); }
+    let (season,): (String,) = sqlx::query_as("SELECT season FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let (missing,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM competitions c WHERE c.competition_type='league' AND c.playoff_places > 0 AND NOT EXISTS (SELECT 1 FROM cup_ties t WHERE t.competition_id=c.id AND t.season=? AND t.round=900)").bind(&season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    Ok(missing == 0)
 }
 
-async fn generate_playoffs(pool: &SqlitePool, season: &str) -> Result<i64, String> {
+pub async fn ensure_playoffs(pool: &SqlitePool, season: &str) -> Result<i64, String> {
     let comps: Vec<(i64, i64, i64)> = sqlx::query_as("SELECT id, playoff_places, total_teams FROM competitions WHERE competition_type='league' AND playoff_places > 0")
         .fetch_all(pool).await.map_err(|e| e.to_string())?;
     let mut created = 0;
     for (comp_id, places, _) in comps {
+        let (regular_pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE competition_id=? AND season=? AND round<>900 AND status='scheduled'")
+            .bind(comp_id).bind(season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        if regular_pending > 0 { continue; }
         let existing: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cup_ties WHERE competition_id=? AND season=? AND round=900").bind(comp_id).bind(season).fetch_one(pool).await.map_err(|e| e.to_string())?;
         if existing.0 > 0 { continue; }
-        let teams: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM league_standings WHERE competition_id=? AND season=? ORDER BY position LIMIT ?").bind(comp_id).bind(season).bind((places * 2).max(2)).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        let teams: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM league_standings WHERE competition_id=? AND season=? AND position > 0 ORDER BY position ASC, club_id ASC LIMIT ?").bind(comp_id).bind(season).bind((places * 2).max(2)).fetch_all(pool).await.map_err(|e| e.to_string())?;
+        if teams.len() < 2 { continue; }
+        let date: (String,) = sqlx::query_as("SELECT COALESCE(MAX(date), ? || '-05-25') FROM matches WHERE competition_id=? AND season=? AND status='finished'")
+            .bind(season.split('/').next().unwrap_or("2027")).bind(comp_id).bind(season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let playoff_date = NaiveDate::parse_from_str(&date.0, "%Y-%m-%d").unwrap_or_else(|_| NaiveDate::from_ymd_opt(season.split('/').next().and_then(|v| v.parse().ok()).unwrap_or(2027), 5, 25).unwrap()) + chrono::Duration::days(7);
         for pair in teams.chunks(2) {
             if pair.len() < 2 { continue; }
             let (mid,): (i64,) = sqlx::query_as("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,stadium_id,status) VALUES(?,?,?,?,?,?,(SELECT stadium_id FROM clubs WHERE id=?),'scheduled') RETURNING id")
-                .bind(comp_id).bind(season).bind(900_i64).bind(format!("{}-06-01", season.split('/').next().unwrap_or("2027"))).bind(pair[0].0).bind(pair[1].0).bind(pair[0].0).fetch_one(pool).await.map_err(|e| e.to_string())?;
+                .bind(comp_id).bind(season).bind(900_i64).bind(playoff_date.format("%Y-%m-%d").to_string()).bind(pair[0].0).bind(pair[1].0).bind(pair[0].0).fetch_one(pool).await.map_err(|e| e.to_string())?;
             sqlx::query("INSERT INTO cup_ties(competition_id,season,round,leg,home_club_id,away_club_id,match_id) VALUES(?,?,900,1,?,?,?)").bind(comp_id).bind(season).bind(pair[0].0).bind(pair[1].0).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
             created += 1;
         }
@@ -183,7 +195,12 @@ pub async fn rollover_season(pool: &SqlitePool) -> Result<String, String> {
     // Expire old contracts without renewal (free agents remain without club - simplified)
     sqlx::query("UPDATE contracts SET is_active=0 WHERE end_date < ? AND is_active=1").bind(new_date.format("%Y-%m-%d").to_string()).execute(pool).await.map_err(|e| e.to_string())?;
 
-    let playoff_matches = generate_playoffs(pool, &season).await?;
+    let playoff_matches = ensure_playoffs(pool, &season).await?;
+    if playoff_matches > 0 {
+        return Err(format!("Se han generado {} partidos de playoff. Avanza los días hasta completarlos antes de cerrar la temporada.", playoff_matches));
+    }
+    let (playoff_pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM cup_ties WHERE season=? AND round=900 AND winner_club_id IS NULL").bind(&season).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if playoff_pending > 0 { return Err("Los playoffs de la temporada todavía tienen partidos pendientes".into()); }
     let playoff_promotions = resolve_playoff_promotions(pool, &season).await?;
     let movements = apply_promotion_relegation(pool, &season).await?;
 
@@ -219,4 +236,36 @@ pub async fn rollover_season(pool: &SqlitePool) -> Result<String, String> {
     }
 
     Ok(msg)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{db, world};
+
+    #[tokio::test]
+    async fn playoffs_are_created_only_after_regular_phase_and_are_idempotent() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (comp_id,): (i64,) = sqlx::query_as("SELECT id FROM competitions WHERE competition_type='league' LIMIT 1").fetch_one(&pool).await.unwrap();
+        sqlx::query("UPDATE competitions SET playoff_places=2 WHERE id=?").bind(comp_id).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE league_standings SET position=CASE WHEN club_id % 4 = 0 THEN 1 WHEN club_id % 4 = 1 THEN 2 ELSE 3 END, played=1 WHERE competition_id=? AND season='2026/2027'").bind(comp_id).execute(&pool).await.unwrap();
+        sqlx::query("UPDATE matches SET status='finished' WHERE competition_id=? AND season='2026/2027'").bind(comp_id).execute(&pool).await.unwrap();
+        let created = ensure_playoffs(&pool, "2026/2027").await.unwrap();
+        assert_eq!(created, 2);
+        let repeated = ensure_playoffs(&pool, "2026/2027").await.unwrap();
+        assert_eq!(repeated, 0);
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM matches WHERE competition_id=? AND season='2026/2027' AND round=900").bind(comp_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn season_is_not_finished_while_playoff_is_pending() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (comp_id,): (i64,) = sqlx::query_as("SELECT id FROM competitions WHERE competition_type='league' LIMIT 1").fetch_one(&pool).await.unwrap();
+        sqlx::query("UPDATE competitions SET playoff_places=1 WHERE id=?").bind(comp_id).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO matches(competition_id,season,round,date,home_club_id,away_club_id,status) SELECT ?, '2026/2027', 900, '2027-06-01', club_id, club_id+1, 'scheduled' FROM league_standings WHERE competition_id=? LIMIT 1").bind(comp_id).bind(comp_id).execute(&pool).await.unwrap();
+        assert!(!is_season_finished(&pool).await.unwrap());
+    }
 }

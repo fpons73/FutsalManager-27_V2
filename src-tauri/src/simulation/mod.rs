@@ -50,7 +50,9 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             .bind(comp_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let tie_info: Option<(i64, i64)> = sqlx::query_as("SELECT ct.leg, c.knockout_two_legs FROM cup_ties ct JOIN competitions c ON c.id=ct.competition_id WHERE ct.match_id=?")
             .bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?;
-        let knockout_decider = competition_type != "league" && tie_info.map(|(leg, two_legs)| two_legs == 0 || leg == 2).unwrap_or(true);
+        let (is_playoff,): (i64,) = sqlx::query_as("SELECT CASE WHEN round=900 THEN 1 ELSE 0 END FROM matches WHERE id=?")
+            .bind(mid).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let knockout_decider = (competition_type != "league" || is_playoff != 0) && tie_info.map(|(leg, two_legs)| two_legs == 0 || leg == 2).unwrap_or(true);
         let snap = if knockout_decider && tie_info.map(|(_, two_legs)| two_legs != 0).unwrap_or(false) {
             let aggregate_before: (i64, i64) = sqlx::query_as("SELECT COALESCE(m.home_score,0), COALESCE(m.away_score,0) FROM matches m JOIN cup_ties first_leg ON first_leg.match_id=m.id JOIN cup_ties current_leg ON current_leg.competition_id=first_leg.competition_id AND current_leg.season=first_leg.season AND current_leg.round=first_leg.round WHERE current_leg.match_id=? AND first_leg.leg=1")
                 .bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0, 0));
@@ -83,14 +85,14 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         }
 
         let is_cup = competition_type;
-        if is_cup == "league" {
+        if is_cup == "league" && is_playoff == 0 {
             update_standings(pool, comp_id, hid, aid, home_goals, away_goals).await?;
         }
         let group_ids: Vec<(i64,)> = sqlx::query_as("SELECT gm.group_id FROM group_members gm JOIN competition_groups cg ON cg.id=gm.group_id WHERE cg.competition_id=? AND cg.season=(SELECT season FROM game_state WHERE id=1) AND gm.club_id IN (?,?) GROUP BY gm.group_id HAVING COUNT(DISTINCT gm.club_id)=2").bind(comp_id).bind(hid).bind(aid).fetch_all(pool).await.unwrap_or_default();
         for (group_id,) in group_ids {
             update_group_members(pool, group_id, hid, aid, home_goals, away_goals).await?;
         }
-        if is_cup != "league" {
+        if is_cup != "league" || is_playoff != 0 {
             let tie: Option<(i64, i64, i64, i64, i64, i64)> = sqlx::query_as("SELECT id, leg, home_club_id, away_club_id, COALESCE(aggregate_home_score,0), COALESCE(aggregate_away_score,0) FROM cup_ties WHERE match_id=?").bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?;
             let is_two_leg = if let Some((_, _, _, _, _, _)) = tie { let (v,): (i64,) = sqlx::query_as("SELECT knockout_two_legs FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.unwrap_or((0,)); v != 0 } else { false };
             if is_two_leg {
@@ -198,6 +200,8 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
 
     recompute_positions(pool).await?;
     let _ = crate::competition::progress_group_competitions(pool).await?;
+    let (season,): (String,) = sqlx::query_as("SELECT season FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let _ = crate::season::ensure_playoffs(pool, &season).await?;
 
     Ok(AdvanceResult {
         from_date: cur_date,

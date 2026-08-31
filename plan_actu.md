@@ -27,7 +27,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Guardado, carga, autoguardado automático y backup manual implementados con copias SQLite seguras.
 - Scouting real con scouts limitados, asignaciones, informes y niebla de guerra.
 - Cantera U12-U20 gestionable, promociones y desarrollo juvenil.
-- Copas nacionales, supercopas, grupos, eliminatorias y playoffs; las fases de grupos ya tienen persistencia, clasificación, actualización de resultados y cruces iniciales de clasificados.
+- Copas nacionales, supercopas, grupos, eliminatorias y playoffs; las fases de grupos ya tienen persistencia, clasificación, actualización de resultados y cruces iniciales de clasificados. Los playoffs de liga ya se generan y se juegan antes del cierre de temporada, con movimientos de división persistentes.
 - Ascensos y descensos entre divisiones, con reglas configurables e historial de movimientos.
 - Sistema de selecciones nacionales con convocatorias, ventanas, grupos, simulación diaria, eliminatorias y palmarés persistente; formatos continentales avanzados pendientes.
 - Moral, felicidad, química, roles, capitanes, compatibilidad, promesas y conversaciones con jugadores.
@@ -94,7 +94,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 2. Copas nacionales y supercopas con selección de participantes y formato eliminatorio.
 3. Fase de grupos y eliminatorias.
 4. Prórroga y tandas de penaltis.
-5. Playoffs por título/ascenso.
+5. Playoffs por título/ascenso y permanencia, con generación idempotente y resolución antes del rollover.
 6. Ascensos y descensos automáticos con reglas por competición.
 7. Selecciones, convocatorias y torneos internacionales.
 8. Historial, palmarés, récords y estadísticas históricas.

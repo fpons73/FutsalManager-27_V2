@@ -35,6 +35,7 @@
 - [x] Reglas específicas de clasificación por competición: criterios configurables de desempate iniciales.
 - [x] Calendarios que eviten solapamientos y saturación de partidos; los partidos programados respetan una separación mínima de 48 horas por club.
 - [x] Prórroga y penaltis plenamente integrados en partidos automáticos y en vivo; las eliminatorias a doble partido solo los aplican si el global queda empatado.
+- [x] Playoffs por título/ascenso y permanencia generados de forma idempotente, jugables antes del cierre de temporada y conectados con los movimientos de división.
 
 ## Prioridad 3 — Selecciones nacionales
 
