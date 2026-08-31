@@ -30,6 +30,7 @@
 - [x] Estilos tácticos persistentes por club aplicados a ritmo, presión, bloque y amplitud.
 - [x] Plan inicial de IA ajustado por calidad relativa, localía y competición.
 - [x] Configuración de estilos tácticos disponible en el Editor antes de iniciar la partida.
+- [x] Rotaciones automáticas de equipos controlados por la máquina según fatiga, marcador y rol.
 
 ## Prioridad 2 — Competiciones completas
 

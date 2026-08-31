@@ -128,7 +128,15 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 > Efectos de instalaciones integrados: entrenamiento +8% por nivel, cantera con desarrollo adicional por nivel y área comercial +5 puntos de demanda por nivel, con límites de seguridad.
 - [ ] Añadir controles mínimos de intervención durante el partido.
 
-## Último hito: IA táctica reactiva
+## Último hito: rotaciones inteligentes de la IA
+
+- [x] Sustituciones automáticas según fatiga, marcador, rol y atributos.
+- [x] Selección contextual de jugadores del banquillo.
+- [x] Integración en simulación automática y partidos en vivo.
+- [x] Registro de cambios de la IA como eventos del partido.
+- [x] Prueba de regresión del selector de sustituciones.
+
+## Hito anterior: IA táctica reactiva
 
 - [x] Cargar el estilo táctico persistente de cada club en simulación y partidos en vivo.
 - [x] Ajustar ritmo, presión, bloque y amplitud según el estilo configurado.

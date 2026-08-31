@@ -133,6 +133,14 @@
 - [ ] Revisar accesibilidad, navegación por teclado y contraste.
 - [ ] Validar estados de carga, error y vacío.
 
+## Hito IA — Rotaciones inteligentes
+
+- [x] Sustituciones automáticas de la IA según fatiga, marcador, rol y atributos.
+- [x] Selección contextual del jugador del banquillo.
+- [x] Integración en simulación automática y partidos en vivo.
+- [x] Registro de sustituciones de la IA como eventos.
+- [x] Prueba de regresión del selector de cambios.
+
 ## Hito J — Carrera y competiciones avanzadas
 
 - [x] Supercopas y formatos configurables básicos.

@@ -563,7 +563,7 @@ impl MatchEngine {
             for &pid in &self.on_pitch_ids[t].clone() {
                 if let Some(pl) = self.players.iter().find(|p| p.id == pid) {
                     if should_substitute(pl.stamina_now, self.time) && !self.bench[t].is_empty() {
-                        let bench_pid = self.bench[t][0];
+                        let bench_pid = self.select_ai_substitute(t, pid);
                         to_swap.push((pid, bench_pid));
                         break;
                     }
@@ -586,10 +586,25 @@ impl MatchEngine {
             self.events.push(MatchEvent {
                 minute: self.time / 60, second: self.time % 60, kind: "substitution".into(),
                 team_id: team as u32, player_id: Some(in_id), assist_player_id: None,
-                description: format!("Cambio: entra {} por {}", in_id, out_id),
+                description: format!("Cambio IA: entra {} por {}", in_id, out_id),
                 x: self.ball_x, y: self.ball_y,
             });
         }
+    }
+
+    fn select_ai_substitute(&self, team: usize, out_id: u32) -> u32 {
+        let losing = self.score[team] < self.score[1 - team];
+        let winning = self.score[team] > self.score[1 - team];
+        self.bench[team].iter().copied().max_by(|a, b| {
+            let score = |id: u32| self.players.iter().find(|p| p.id == id).map(|p| {
+                let role_fit = if p.role == self.players.iter().find(|q| q.id == out_id).map(|q| q.role).unwrap_or(Role::UNI) { 12.0 } else { 0.0 };
+                let attacking = p.attrs.finishing + p.attrs.pace + p.attrs.dribbling;
+                let defending = p.attrs.tackling + p.attrs.positioning + p.attrs.stamina;
+                let context = if losing { attacking } else if winning { defending } else { p.attrs.stamina * 0.5 };
+                p.stamina_now + role_fit + context * 0.2
+            }).unwrap_or(0.0);
+            score(*a).partial_cmp(&score(*b)).unwrap_or(std::cmp::Ordering::Equal)
+        }).unwrap_or(self.bench[team][0])
     }
 
     fn resolve_action(&mut self) -> Option<MatchEvent> {
@@ -1155,6 +1170,22 @@ mod tests {
         assert_eq!(snap.time_seconds, 2400);
         assert!(snap.score[0] + snap.score[1] <= 15, "goles totales razonables: {:?}", snap.score);
         assert!(snap.events.iter().any(|e| e.kind=="goal" || e.kind=="double_penalty_goal") || snap.score==[0,0]);
+    }
+
+    #[test]
+    fn ai_substitution_prefers_contextual_bench_player() {
+        let mut roster: Vec<(u32,u8,Role,PlayerAttrs)> = (1..=12).map(|i| (i, i as u8, Role::ALA, mk_attrs(120, Role::ALA))).collect();
+        roster[0].2 = Role::POR;
+        roster[1].2 = Role::POR;
+        let mut eng = MatchEngine::new([(0,"A".into(),"#f00".into()), (1,"B".into(),"#00f".into())], [roster.clone(), roster]).with_seed(11);
+        eng.start();
+        eng.score = [0, 2];
+        let out = eng.on_pitch_ids[0][2];
+        eng.players.iter_mut().find(|p| p.id == out).unwrap().stamina_now = 30.0;
+        let selected = eng.select_ai_substitute(0, out);
+        assert!(eng.bench[0].contains(&selected));
+        eng.maybe_substitute();
+        assert!(eng.events.iter().any(|e| e.kind == "substitution" && e.team_id == 0));
     }
 
     #[test]
