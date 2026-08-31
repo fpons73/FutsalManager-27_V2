@@ -90,7 +90,7 @@
 - [x] Área Comercial inicial integrada en la navegación y Finanzas.
 - [x] Ofertas negociables de derechos televisivos con firma y vencimiento.
 - [x] Mejoras de instalaciones de entrenamiento, cantera y área comercial, con niveles, inversión y efectos aplicados a progreso, cantera y demanda comercial.
-- [ ] Demanda dinámica y precios de entradas.
+- [x] Demanda dinámica y precios de entradas, con asistencia e ingresos persistentes por partido.
 - [ ] Repercusión económica de resultados y reputación.
 
 ## Prioridad 7 — Editor completo

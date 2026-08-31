@@ -77,6 +77,7 @@ pub fn run() {
       commands::finance_cmd::get_tv_offers,
       commands::finance_cmd::accept_tv_offer,
       commands::finance_cmd::upgrade_facility,
+      commands::finance_cmd::set_ticket_price,
       commands::finance_cmd::get_injuries,
       commands::season_cmd::check_season_finished,
       commands::season_cmd::rollover_season_cmd,

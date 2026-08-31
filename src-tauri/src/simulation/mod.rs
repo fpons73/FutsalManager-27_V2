@@ -124,13 +124,9 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         results.push(summary);
     }
 
-    // Ticket income for home clubs
-    for (_, hid, _, _) in matches.iter().copied() {
-        let (cap,): (Option<i64>,) = sqlx::query_as("SELECT capacity FROM stadiums WHERE id=(SELECT stadium_id FROM clubs WHERE id=?)").bind(hid).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((Some(3000),));
-        let cap = cap.unwrap_or(3000) as f64;
-        let attendance = (cap * 0.65 + rand::random::<f64>() * cap * 0.25) as i64;
-        let income = attendance as f64 * 12.0;
-        let _ = crate::finance::add_ticket_income(pool, hid, income).await;
+    // Taquilla dinámica e idempotente para cada partido en casa.
+    for (match_id, home_id, away_id, competition_id) in matches.iter().copied() {
+        crate::finance::add_match_ticket_income(pool, match_id, home_id, away_id, competition_id, &cur_date).await?;
     }
 
     // Weekly processing on Mondays

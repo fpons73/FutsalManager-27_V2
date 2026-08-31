@@ -122,6 +122,14 @@ mod tests {
 }
 
 #[tauri::command]
+pub async fn set_ticket_price(state: State<'_, AppState>, price: f64) -> Result<String, String> {
+    let pool = active_pool(&state)?;
+    let club = user_club(&pool).await?;
+    crate::finance::set_ticket_price(&pool, club, price).await?;
+    Ok("Precio de entradas actualizado".into())
+}
+
+#[tauri::command]
 pub async fn upgrade_facility(state: State<'_, AppState>, facility: String) -> Result<String, String> {
     let pool = active_pool(&state)?;
     let club = user_club(&pool).await?;
