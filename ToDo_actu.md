@@ -224,6 +224,7 @@
 - [x] Cantera conectada a la navegación, progreso diario y promociones.
 - [x] Atributos del staff aplicados al rendimiento de sistemas deportivos.
 - [x] IA táctica reactiva: cambios de plan por marcador, tiempo, faltas y fatiga en equipos controlados por la máquina.
+- [x] Estilos tácticos persistentes por club (contragolpe, posesión, presión alta y bloque bajo) aplicados al motor.
 
 ## Hito L — Contratos avanzados
 

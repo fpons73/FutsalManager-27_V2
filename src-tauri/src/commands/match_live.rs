@@ -233,11 +233,12 @@ pub async fn start_live_match_tactics(
     eng.set_allow_powerplay(0, powerplay_enabled);
     if let Some(auto) = load_automation(&pool, home).await? { eng.set_automation(0, Some(auto)); }
     // Tacticas del rival desde BD (o default)
-    let away_tac: Option<(String, i64, i64, i64, i64, i64)> = sqlx::query_as(
-        "SELECT formation, tempo, pressing, defensive_line, width, powerplay_enabled FROM tactics WHERE club_id=?"
+    let away_tac: Option<(String, i64, i64, i64, i64, String)> = sqlx::query_as(
+        "SELECT formation, tempo, pressing, defensive_line, width, COALESCE(playing_style,'balanced') FROM tactics WHERE club_id=?"
     ).bind(away).fetch_optional(&pool).await.map_err(|e| e.to_string())?;
-    if let Some((af, at, ap, ad, aw, _)) = away_tac {
-        eng.set_tactics(1, EngineTactics { formation: formation_code(&af), tempo: at as f32, pressing: ap as f32, defensive_line: ad as f32, width: aw as f32 });
+    if let Some((af, at, ap, ad, aw, style)) = away_tac {
+        let base = EngineTactics { formation: formation_code(&af), tempo: at as f32, pressing: ap as f32, defensive_line: ad as f32, width: aw as f32 };
+        eng.set_tactics(1, crate::engine::tactics_for_style(base, &style));
     }
     eng.start();
     let snap = eng.snapshot();

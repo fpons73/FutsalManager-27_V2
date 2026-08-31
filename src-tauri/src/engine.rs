@@ -858,6 +858,20 @@ impl MatchEngine {
     }
 }
 
+fn formation_code_value(f: &str) -> u8 {
+    match f { "4-0" => 1, "2-2" => 2, "5-0" => 3, _ => 0 }
+}
+
+pub fn tactics_for_style(base: EngineTactics, style: &str) -> EngineTactics {
+    match style {
+        "counter" => EngineTactics { tempo: (base.tempo + 8.0).min(100.0), pressing: (base.pressing - 8.0).max(0.0), defensive_line: (base.defensive_line - 8.0).max(0.0), ..base },
+        "possession" => EngineTactics { tempo: (base.tempo - 5.0).max(0.0), pressing: (base.pressing + 5.0).min(100.0), width: (base.width + 8.0).min(100.0), ..base },
+        "high_press" => EngineTactics { pressing: (base.pressing + 12.0).min(100.0), defensive_line: (base.defensive_line + 8.0).min(100.0), ..base },
+        "low_block" => EngineTactics { pressing: (base.pressing - 12.0).max(0.0), defensive_line: (base.defensive_line - 15.0).max(0.0), tempo: (base.tempo - 5.0).max(0.0), ..base },
+        _ => base,
+    }
+}
+
 fn tactical_target(role: Role, team_id: u32, attacking: bool, t: EngineTactics) -> (f32, f32) {
     let left = team_id == 0;
     // profundidad (0-100): desplaza el bloque adelante/atrás
@@ -980,7 +994,14 @@ async fn simulate_clubs_with_context(pool: &sqlx::SqlitePool, home_club: i64, aw
     let mut eng = MatchEngine::new(
         [(0, hn, hc), (1, an, ac)],
         [r1, r2],
-    );        if knockout {
+    );
+    for (team, club_id) in [(0, home_club), (1, away_club)] {
+        if let Some((formation, tempo, pressing, defensive_line, width, style)) = sqlx::query_as::<_, (String, i64, i64, i64, i64, String)>("SELECT formation,tempo,pressing,defensive_line,width,COALESCE(playing_style,'balanced') FROM tactics WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())? {
+            let base = EngineTactics { formation: formation_code_value(&formation), tempo: tempo as f32, pressing: pressing as f32, defensive_line: defensive_line as f32, width: width as f32 };
+            eng.set_tactics(team, tactics_for_style(base, &style));
+        }
+    }
+    if knockout {
         eng.start();
         while eng.state != crate::engine::MatchState::Finished {
             if eng.state == crate::engine::MatchState::HalfTime {
@@ -1058,6 +1079,16 @@ mod tests {
         let before = eng.events.len();
         eng.apply_reactive_ai(0);
         assert_eq!(eng.events.len(), before, "la IA no debe cambiar de plan continuamente");
+    }
+
+    #[test]
+    fn persistent_styles_adjust_base_tactics() {
+        let base = EngineTactics { formation: 0, tempo: 60.0, pressing: 60.0, defensive_line: 60.0, width: 50.0 };
+        let counter = tactics_for_style(base, "counter");
+        let possession = tactics_for_style(base, "possession");
+        assert!(counter.tempo > base.tempo && counter.defensive_line < base.defensive_line);
+        assert!(possession.width > base.width && possession.pressing > base.pressing);
+        assert_eq!(tactics_for_style(base, "balanced").tempo, base.tempo);
     }
 
     #[test]

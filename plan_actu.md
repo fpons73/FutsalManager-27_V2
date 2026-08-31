@@ -35,7 +35,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Gestión funcional del staff y efecto de sus atributos; entrenador, asistentes, técnicos, cantera, ojeadores, fisio y preparador físico ya aportan efectos por puesto.
 - Tácticas durante el partido, cambios manuales y tiempos muertos.
 - Automatismos tácticos entrenables, configurables y aplicados contextualmente durante la simulación.
-- IA táctica reactiva y estilos persistentes por club; los equipos no controlados reaccionan al marcador, tiempo, faltas y fatiga durante la simulación.
+- IA táctica reactiva y estilos persistentes por club; los equipos no controlados reaccionan al marcador, tiempo, faltas y fatiga durante la simulación, partiendo de estilos de contragolpe, posesión, presión alta o bloque bajo.
 - Estadísticas individuales por partido/temporada y rankings iniciales; análisis postpartido, asistencias avanzadas, porterías imbatidas y gráficos aún pendientes.
 - Historial de temporadas, palmarés, récords y evolución de jugadores.
 - Noticias, medios, rumores y reputación pública.
@@ -129,6 +129,10 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - [ ] Añadir controles mínimos de intervención durante el partido.
 
 ## Último hito: IA táctica reactiva
+
+- [x] Cargar el estilo táctico persistente de cada club en simulación y partidos en vivo.
+- [x] Ajustar ritmo, presión, bloque y amplitud según el estilo configurado.
+- [x] Mantener la reacción contextual de marcador, faltas y fatiga sobre la base del estilo.
 
 - [x] Evaluar el contexto del partido cada intervalo de juego.
 - [x] Cambiar a un plan ofensivo si la IA pierde en el tramo final.
