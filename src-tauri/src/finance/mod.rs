@@ -249,6 +249,30 @@ pub async fn add_travel_cost(pool: &SqlitePool, match_id: i64, club_id: i64, ori
     Ok(())
 }
 
+pub async fn apply_contract_match_bonuses(pool: &SqlitePool, match_id: i64, date: &str) -> Result<f64, String> {
+    let match_row: (i64, i64, i64, i64) = sqlx::query_as("SELECT home_club_id, away_club_id, home_score, away_score FROM matches WHERE id=?")
+        .bind(match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let rows: Vec<(i64, i64, f64, f64, i64)> = sqlx::query_as("SELECT c.id, c.club_id, COALESCE(c.appearance_bonus,0), COALESCE(c.clean_sheet_bonus,0), COALESCE(ps.por_natural,0) FROM contracts c JOIN match_player_stats ms ON ms.match_id=? AND ms.player_id=c.player_id AND ms.club_id=c.club_id AND ms.minutes_played>0 JOIN player_positions ps ON ps.player_id=c.player_id WHERE c.is_active=1")
+        .bind(match_id).fetch_all(&mut *tx).await.map_err(|e| e.to_string())?;
+    let mut total = 0.0;
+    for (contract_id, club_id, appearance_bonus, clean_sheet_bonus, goalkeeper) in rows {
+        if appearance_bonus > 0.0 {
+            let inserted = sqlx::query("INSERT OR IGNORE INTO contract_bonus_payments(contract_id,match_id,bonus_type,amount,created_at) VALUES(?,?, 'appearance',?,?)")
+                .bind(contract_id).bind(match_id).bind(appearance_bonus).bind(date).execute(&mut *tx).await.map_err(|e| e.to_string())?.rows_affected();
+            if inserted > 0 { total += appearance_bonus; sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(appearance_bonus).bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?; }
+        }
+        let clean_sheet = (club_id == match_row.0 && match_row.3 == 0) || (club_id == match_row.1 && match_row.2 == 0);
+        if goalkeeper > 0 && clean_sheet && clean_sheet_bonus > 0.0 {
+            let inserted = sqlx::query("INSERT OR IGNORE INTO contract_bonus_payments(contract_id,match_id,bonus_type,amount,created_at) VALUES(?,?, 'clean_sheet',?,?)")
+                .bind(contract_id).bind(match_id).bind(clean_sheet_bonus).bind(date).execute(&mut *tx).await.map_err(|e| e.to_string())?.rows_affected();
+            if inserted > 0 { total += clean_sheet_bonus; sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(clean_sheet_bonus).bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?; }
+        }
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(total)
+}
+
 pub async fn add_ticket_income(pool: &SqlitePool, club_id: i64, amount: f64) -> Result<(), String> {
     sqlx::query("UPDATE club_finances SET balance=balance+?, ticket_income=ticket_income+? WHERE club_id=?").bind(amount).bind(amount).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
     Ok(())
@@ -263,6 +287,24 @@ pub async fn check_transfer_budget(pool: &SqlitePool, club_id: i64, fee: f64) ->
 mod tests {
     use super::*;
     use crate::{db, world};
+
+    #[tokio::test]
+    async fn contract_match_bonuses_are_idempotent() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (club_id,): (i64,) = sqlx::query_as("SELECT id FROM clubs ORDER BY id LIMIT 1").fetch_one(&pool).await.unwrap();
+        let (away_id,): (i64,) = sqlx::query_as("SELECT id FROM clubs WHERE id<>? ORDER BY id LIMIT 1").bind(club_id).fetch_one(&pool).await.unwrap();
+        let (comp_id,): (i64,) = sqlx::query_as("SELECT id FROM competitions LIMIT 1").fetch_one(&pool).await.unwrap();
+        let (player_id,): (i64,) = sqlx::query_as("SELECT player_id FROM contracts WHERE club_id=? AND is_active=1 LIMIT 1").bind(club_id).fetch_one(&pool).await.unwrap();
+        sqlx::query("UPDATE contracts SET appearance_bonus=125 WHERE player_id=? AND club_id=? AND is_active=1").bind(player_id).bind(club_id).execute(&pool).await.unwrap();
+        let (match_id,): (i64,) = sqlx::query_as("INSERT INTO matches(competition_id,season,date,home_club_id,away_club_id,status) VALUES(?,?,?,?,?,'finished') RETURNING id").bind(comp_id).bind("2026/2027").bind("2026-07-10").bind(club_id).bind(away_id).fetch_one(&pool).await.unwrap();
+        sqlx::query("INSERT INTO match_player_stats(match_id,player_id,club_id,minutes_played) VALUES(?,?,?,40)").bind(match_id).bind(player_id).bind(club_id).execute(&pool).await.unwrap();
+        let (before,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(club_id).fetch_one(&pool).await.unwrap();
+        apply_contract_match_bonuses(&pool, match_id, "2026-07-10").await.unwrap();
+        apply_contract_match_bonuses(&pool, match_id, "2026-07-10").await.unwrap();
+        let (after,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(club_id).fetch_one(&pool).await.unwrap();
+        assert!((before - after - 125.0).abs() < 0.01);
+    }
 
     #[tokio::test]
     async fn facility_upgrade_changes_level_and_balance_once() {

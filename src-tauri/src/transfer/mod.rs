@@ -95,6 +95,59 @@ pub async fn offer_loan(pool: &SqlitePool, player_id: i64, from_club: i64, to_cl
     Ok(format!("Cesión acordada hasta {}",end.format("%Y-%m-%d")))
 }
 
+#[derive(Serialize, Clone)]
+pub struct PrecontractRow {
+    pub id: i64,
+    pub player_id: i64,
+    pub player_name: String,
+    pub from_club: String,
+    pub to_club: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub wage_weekly: f64,
+    pub signing_bonus: f64,
+    pub status: String,
+}
+
+pub async fn get_precontracts(pool: &SqlitePool, club_id: i64) -> Result<Vec<PrecontractRow>, String> {
+    let rows = sqlx::query_as::<_, (i64,i64,String,String,String,String,String,f64,f64,String)>(
+        "SELECT pc.id,pc.player_id,p.common_name,fc.name,tc.name,pc.start_date,pc.end_date,pc.wage_weekly,pc.signing_bonus,pc.status FROM precontracts pc JOIN players p ON p.id=pc.player_id JOIN clubs fc ON fc.id=pc.from_club_id JOIN clubs tc ON tc.id=pc.to_club_id WHERE pc.from_club_id=? OR pc.to_club_id=? ORDER BY pc.start_date,pc.id"
+    ).bind(club_id).bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|(id,player_id,player_name,from_club,to_club,start_date,end_date,wage_weekly,signing_bonus,status)| PrecontractRow { id,player_id,player_name,from_club,to_club,start_date,end_date,wage_weekly,signing_bonus,status }).collect())
+}
+
+pub async fn make_precontract(pool: &SqlitePool, player_id: i64, to_club: i64, wage: f64, signing_bonus: f64, years: i64) -> Result<String, String> {
+    if !wage.is_finite() || wage <= 0.0 || !signing_bonus.is_finite() || signing_bonus < 0.0 || !(1..=5).contains(&years) { return Err("Condiciones de precontrato no válidas".into()); }
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let (from_club, end_date): (i64,String) = sqlx::query_as("SELECT club_id,end_date FROM contracts WHERE player_id=? AND is_active=1 AND loan_parent_id IS NULL")
+        .bind(player_id).fetch_one(&mut *tx).await.map_err(|_| "El jugador no tiene un contrato activo válido".to_string())?;
+    if from_club == to_club { return Err("El jugador ya pertenece a tu club".into()); }
+    let (today,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
+    let current_end = chrono::NaiveDate::parse_from_str(&end_date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let start = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    if current_end <= start { return Err("El contrato ya ha finalizado".into()); }
+    sqlx::query("INSERT INTO precontracts(player_id,from_club_id,to_club_id,agreed_date,start_date,end_date,wage_weekly,signing_bonus) VALUES(?,?,?,?,?,?,?,?)")
+        .bind(player_id).bind(from_club).bind(to_club).bind(&today).bind(current_end.format("%Y-%m-%d").to_string()).bind((current_end + chrono::Duration::days(365*years)).format("%Y-%m-%d").to_string()).bind(wage).bind(signing_bonus).execute(&mut *tx).await.map_err(|e| if e.to_string().contains("UNIQUE") { "Ya existe un precontrato para este jugador y club".into() } else { e.to_string() })?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(format!("Precontrato acordado; comenzará el {}", current_end.format("%Y-%m-%d")))
+}
+
+pub async fn process_precontracts(pool: &SqlitePool) -> Result<(), String> {
+    let (today,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let rows = sqlx::query_as::<_, (i64,i64,i64,i64,String,f64,f64)>("SELECT id,player_id,from_club_id,to_club_id,end_date,wage_weekly,signing_bonus FROM precontracts WHERE status='pending' AND start_date<=?").bind(&today).fetch_all(pool).await.map_err(|e| e.to_string())?;
+    for (id, player_id, from_club, to_club, end_date, wage, signing_bonus) in rows {
+        let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE contracts SET is_active=0 WHERE player_id=? AND is_active=1").bind(player_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        let end = chrono::NaiveDate::parse_from_str(&end_date, "%Y-%m-%d").unwrap_or_else(|_| chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap());
+        sqlx::query("INSERT INTO contracts(player_id,club_id,wage_weekly,start_date,end_date,is_active,signing_bonus) VALUES(?,?,?,?,?,1,?)").bind(player_id).bind(to_club).bind(wage).bind(&today).bind(end.format("%Y-%m-%d").to_string()).bind(signing_bonus).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE precontracts SET status='completed' WHERE id=?").bind(id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE club_finances SET total_wages=(SELECT COALESCE(SUM(wage_weekly),0) FROM contracts WHERE club_id=? AND is_active=1),balance=balance-? WHERE club_id=?").bind(to_club).bind(signing_bonus).bind(to_club).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        sqlx::query("UPDATE club_finances SET total_wages=(SELECT COALESCE(SUM(wage_weekly),0) FROM contracts WHERE club_id=? AND is_active=1) WHERE club_id=?").bind(from_club).bind(from_club).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 pub async fn get_free_agents(pool: &SqlitePool, _user_club: i64) -> Result<Vec<MarketPlayer>, String> {
     let rows = sqlx::query_as::<_, (i64, String, String, Option<String>, Option<String>, String, i64, i64, f64)>("SELECT p.id,p.common_name,n.name,n.flag_path,n2.flag_path,COALESCE(pos.position,'UNI'),ps.current_ability,ps.potential_ability,COALESCE(last.wage_weekly,500) FROM players p JOIN player_states ps ON ps.player_id=p.id JOIN nations n ON n.id=p.nation_id LEFT JOIN nations n2 ON n2.id=p.second_nation_id LEFT JOIN (SELECT player_id,MAX(id) id FROM contracts GROUP BY player_id) latest ON latest.player_id=p.id LEFT JOIN contracts last ON last.id=latest.id LEFT JOIN (SELECT player_id,CASE WHEN por_natural>=18 THEN 'POR' WHEN cie_natural>=18 THEN 'CIE' WHEN piv_natural>=18 THEN 'PIV' WHEN ala_natural>=18 THEN 'ALA' ELSE 'UNI' END position FROM player_positions) pos ON pos.player_id=p.id WHERE p.id NOT IN (SELECT player_id FROM contracts WHERE is_active=1) AND p.is_retired=0 ORDER BY ps.current_ability DESC LIMIT 50").fetch_all(pool).await.map_err(|e| e.to_string())?;
     Ok(rows.into_iter().map(| (id,name,nation,flag_path,second_flag_path,position,ca,pa,wage)| MarketPlayer { id,name,age:25,nation:nation.clone(),position,secondary_position:None,flag_path,second_flag_path,ca,pa,club_id:0,club_name:"Agente libre".into(),club_short:"LIBRE".into(),value:0.0,wage,contract_end:"Libre".into(),knowledge:100 }).collect())
@@ -143,14 +196,18 @@ pub async fn get_contracts(pool: &SqlitePool, club_id: i64) -> Result<Vec<Contra
 }
 
 pub async fn renew_contract(pool: &SqlitePool, club_id: i64, player_id: i64, years: i64, wage: f64, release_clause: Option<f64>, role: String, signing_bonus: f64, appearance_bonus: f64, clean_sheet_bonus: f64) -> Result<String, String> {
-    if !(1..=5).contains(&years) || wage <= 0.0 || signing_bonus < 0.0 || appearance_bonus < 0.0 || clean_sheet_bonus < 0.0 { return Err("Parámetros de contrato no válidos".into()); }
-    let (contract_id, current_end): (i64, String) = sqlx::query_as("SELECT id, end_date FROM contracts WHERE player_id=? AND club_id=? AND is_active=1").bind(player_id).bind(club_id).fetch_one(pool).await.map_err(|_| "El jugador no pertenece a tu club".to_string())?;
-    let (today,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e| e.to_string())?;
+    if !(1..=5).contains(&years) || !wage.is_finite() || wage <= 0.0 || [signing_bonus, appearance_bonus, clean_sheet_bonus].iter().any(|v| !v.is_finite() || *v < 0.0) || release_clause.is_some_and(|v| !v.is_finite() || v < 0.0) { return Err("Parámetros de contrato no válidos".into()); }
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    let (contract_id, current_end): (i64, String) = sqlx::query_as("SELECT id, end_date FROM contracts WHERE player_id=? AND club_id=? AND is_active=1")
+        .bind(player_id).bind(club_id).fetch_one(&mut *tx).await.map_err(|_| "El jugador no pertenece a tu club".to_string())?;
+    let (today,): (String,) = sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
     let start = chrono::NaiveDate::parse_from_str(&current_end, "%Y-%m-%d").unwrap_or_else(|_| chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d").unwrap());
     let end = start + chrono::Duration::days(365 * years);
     sqlx::query("UPDATE contracts SET wage_weekly=?, end_date=?, release_clause=?, contract_role=?, signing_bonus=?, appearance_bonus=?, clean_sheet_bonus=?, renewal_status='accepted' WHERE id=?")
-        .bind(wage).bind(end.format("%Y-%m-%d").to_string()).bind(release_clause).bind(role).bind(signing_bonus).bind(appearance_bonus).bind(clean_sheet_bonus).bind(contract_id).execute(pool).await.map_err(|e| e.to_string())?;
-    sqlx::query("UPDATE club_finances SET total_wages=(SELECT COALESCE(SUM(wage_weekly),0) FROM contracts WHERE club_id=? AND is_active=1) WHERE club_id=?").bind(club_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
+        .bind(wage).bind(end.format("%Y-%m-%d").to_string()).bind(release_clause).bind(role).bind(signing_bonus).bind(appearance_bonus).bind(clean_sheet_bonus).bind(contract_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("UPDATE club_finances SET total_wages=(SELECT COALESCE(SUM(wage_weekly),0) FROM contracts WHERE club_id=? AND is_active=1) WHERE club_id=?")
+        .bind(club_id).bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
     Ok(format!("Contrato renovado hasta {}", end.format("%Y-%m-%d")))
 }
 

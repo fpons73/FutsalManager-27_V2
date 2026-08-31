@@ -2,6 +2,20 @@ use tauri::State;
 use crate::commands::AppState;
 
 #[tauri::command]
+pub async fn get_precontracts(state: State<'_, AppState>) -> Result<Vec<crate::transfer::PrecontractRow>, String> {
+    let pool={state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida")?};
+    let club: i64=sqlx::query_as::<_,(Option<i64>,)>("SELECT user_club_id FROM game_state WHERE id=1").fetch_one(&pool).await.map_err(|e|e.to_string())?.0.ok_or("Sin club")?;
+    crate::transfer::get_precontracts(&pool,club).await
+}
+
+#[tauri::command]
+pub async fn make_precontract(state: State<'_, AppState>, player_id:i64, wage:f64, signing_bonus:f64, years:i64) -> Result<String,String> {
+    let pool={state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida")?};
+    let club: i64=sqlx::query_as::<_,(Option<i64>,)>("SELECT user_club_id FROM game_state WHERE id=1").fetch_one(&pool).await.map_err(|e|e.to_string())?.0.ok_or("Sin club")?;
+    crate::transfer::make_precontract(&pool,player_id,club,wage,signing_bonus,years).await
+}
+
+#[tauri::command]
 pub async fn get_loans(state: State<'_, AppState>) -> Result<Vec<crate::transfer::LoanRow>, String> {
     let pool={state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida")?};
     let club: i64=sqlx::query_as::<_,(Option<i64>,)>("SELECT user_club_id FROM game_state WHERE id=1").fetch_one(&pool).await.map_err(|e|e.to_string())?.0.ok_or("Sin club")?;

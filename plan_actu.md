@@ -31,7 +31,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Ascensos y descensos entre divisiones, con reglas configurables e historial de movimientos.
 - Sistema de selecciones nacionales con convocatorias, ventanas, grupos, simulación diaria, eliminatorias y palmarés persistente; formatos continentales avanzados pendientes.
 - Moral, felicidad, química, roles, capitanes, compatibilidad, promesas y conversaciones con jugadores.
-- Contratos avanzados, renovaciones, cláusulas, bonus, cesiones y jugadores libres.
+- Contratos avanzados, renovaciones transaccionales, cláusulas, bonus deportivos idempotentes, cesiones, precontratos y jugadores libres.
 - Gestión funcional del staff y efecto de sus atributos; entrenador, asistentes, técnicos, cantera, ojeadores, fisio y preparador físico ya aportan efectos por puesto.
 - Tácticas durante el partido, cambios manuales y tiempos muertos.
 - Automatismos tácticos entrenables, configurables y aplicados contextualmente durante la simulación.
@@ -127,6 +127,13 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 
 > Efectos de instalaciones integrados: entrenamiento +8% por nivel, cantera con desarrollo adicional por nivel y área comercial +5 puntos de demanda por nivel, con límites de seguridad.
 - [ ] Añadir controles mínimos de intervención durante el partido.
+
+## Último hito: contratos avanzados
+
+- [x] Liquidar bonus de aparición y portería imbatida una sola vez por contrato y partido.
+- [x] Aplicar bonus tanto a partidos automáticos como a partidos en vivo.
+- [x] Añadir precontratos con validación, consulta desde la API y activación automática al vencimiento.
+- [x] Ejecutar renovaciones dentro de una transacción y validar importes finitos/no negativos.
 - [x] Exponer visualmente el desenlace de prórroga y penaltis en calendario y resumen.
 - [x] Verificar build, typecheck y tests.
 

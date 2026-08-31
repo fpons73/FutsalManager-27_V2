@@ -13,6 +13,7 @@
 
 - [x] Moral y felicidad conectadas a resultados y dinámica semanal.
 - [ ] Confianza y satisfacción avanzada; las promesas individuales ya disponen de persistencia, validación y evaluación inicial.
+- [x] Contratos avanzados: cláusulas, renovaciones transaccionales, bonus por aparición/portería imbatida idempotentes y precontratos activados al vencimiento.
 - [x] Staff de club con efectos por puesto en entrenamiento, cantera, scouting y prevención de lesiones; atributos y costes se mantienen configurables desde el Editor.
 - [x] Alertas contractuales de vencimiento y liberación automática de jugadores.
 
@@ -136,7 +137,7 @@
 - Mundo inicial, naciones, ISO y banderas.
 - Clubes, jugadores, staff y agentes libres ficticios.
 - Posiciones principales/secundarias y doble nacionalidad.
-- Contratos, renovaciones, bonus, cláusulas y cesiones básicas.
+- Contratos, renovaciones, bonus, cláusulas, cesiones y precontratos con activación automática.
 - Mercado, scouting, conocimiento parcial e informes.
 - Cantera U12-U20 y promoción juvenil.
 - Entrenamiento y progresión básica.

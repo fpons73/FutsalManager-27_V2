@@ -224,6 +224,15 @@
 - [x] Cantera conectada a la navegación, progreso diario y promociones.
 - [x] Atributos del staff aplicados al rendimiento de sistemas deportivos.
 
+## Hito L — Contratos avanzados
+
+- [x] Bonus de aparición y portería imbatida liquidados de forma idempotente por contrato y partido.
+- [x] Bonus integrados en simulación automática y partidos en vivo.
+- [x] Renovaciones con validación de importes y transacción atómica.
+- [x] Precontratos persistentes, consultables desde Mercado y activados automáticamente al vencimiento.
+- [x] API Tauri y tipos frontend para consultar y crear precontratos.
+- [x] Verificación: `cargo test --lib` (40 tests), `cargo check`, `pnpm run build` y `git diff --check`.
+
 ## Verificación de cada hito
 
 - `pnpm run build` / typecheck.

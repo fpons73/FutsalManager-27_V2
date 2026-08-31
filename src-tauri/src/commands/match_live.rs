@@ -336,6 +336,8 @@ async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, s
         }
     }
     tx.commit().await.map_err(|e| e.to_string())?;
+    let (date,): (String,) = sqlx::query_as("SELECT date FROM matches WHERE id=?").bind(info.match_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    crate::finance::apply_contract_match_bonuses(pool, info.match_id, &date).await?;
     Ok(())
 }
 

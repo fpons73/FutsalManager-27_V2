@@ -58,6 +58,8 @@ pub fn run() {
       commands::match_live::start_live_match_tactics,
       commands::transfer_cmd::get_loans,
       commands::transfer_cmd::offer_loan,
+      commands::transfer_cmd::get_precontracts,
+      commands::transfer_cmd::make_precontract,
       commands::transfer_cmd::get_free_agents,
       commands::transfer_cmd::sign_free_agent,
       commands::transfer_cmd::get_market,

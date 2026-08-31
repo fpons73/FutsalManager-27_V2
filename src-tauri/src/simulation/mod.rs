@@ -11,6 +11,7 @@ pub struct AdvanceResult {
 }
 
 pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
+    crate::transfer::process_precontracts(pool).await?;
     let _ = crate::commands::national_cmd::generate_international_windows(pool).await;
     let _ = crate::commands::national_cmd::ensure_national_tournament_entries(pool).await;
     let _ = crate::commands::national_cmd::generate_national_tournament_matches(pool).await;
@@ -74,6 +75,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         crate::finance::apply_match_reputation(pool, mid, hid, aid, home_goals, away_goals, &cur_date).await?;
 
         persist_player_statistics(pool, mid, comp_id, &snap, hid, aid).await?;
+        crate::finance::apply_contract_match_bonuses(pool, mid, &cur_date).await?;
 
         for ev in &snap.events {
             if ev.kind == "goal" || ev.kind == "double_penalty_goal" || ev.kind == "foul" || ev.kind == "double_penalty" {
