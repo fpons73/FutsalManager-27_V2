@@ -65,6 +65,10 @@ pub async fn ensure_default_schedule(pool: &SqlitePool, club_id: i64) -> Result<
     Ok(())
 }
 
+pub fn facility_training_factor(level: i64) -> f64 {
+    1.0 + (level.clamp(1, 5) - 1) as f64 * 0.08
+}
+
 pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Vec<String>, String> {
     // La cohesión crece con una semana completada; la química se aproxima a la media moral.
     sqlx::query("UPDATE club_dynamics SET cohesion=MIN(100, cohesion+1), chemistry=MIN(100, MAX(0, chemistry + CASE WHEN (SELECT AVG(morale) FROM player_states ps JOIN contracts c ON c.player_id=ps.player_id WHERE c.club_id=? AND c.is_active=1) > chemistry THEN 1 ELSE -1 END), updated_at=CURRENT_TIMESTAMP WHERE club_id=?").bind(club_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
@@ -94,6 +98,7 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let age = ((today - dob_d).num_days()/365) as i64;
         let (prof,): (i64,) = sqlx::query_as("SELECT professionalism FROM player_attributes WHERE player_id=?").bind(pid).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let staff: (i64,i64,i64,i64,i64,i64) = sqlx::query_as("SELECT COALESCE(MAX(tactical),0),COALESCE(MAX(working_youngsters),0),COALESCE(MAX(physio_level),0),COALESCE(MAX(man_management),0),COALESCE(MAX(judging),0),COALESCE(MAX(motivating),0) FROM staff WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let (training_level,): (i64,) = sqlx::query_as("SELECT COALESCE(training_level,1) FROM club_facilities WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((1,));
 
         if ca >= pa { continue; }
 
@@ -110,7 +115,7 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let avg_intensity: f64 = schedule.iter().map(|s| s.intensity as f64).sum::<f64>() / schedule.len() as f64 / 80.0;
 
         let staff_factor = 0.75 + (staff.0.max(staff.1) as f64 / 20.0) * 0.5;
-        let improvement = 0.12 * age_factor * pot_factor * prof_factor * avg_intensity * staff_factor;
+        let improvement = 0.12 * age_factor * pot_factor * prof_factor * avg_intensity * staff_factor * facility_training_factor(training_level);
         if improvement < 0.02 { continue; }
 
         let new_ca = ((ca as f64 + improvement).round() as i64).min(pa).min(200);

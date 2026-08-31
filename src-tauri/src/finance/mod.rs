@@ -86,6 +86,10 @@ pub async fn upgrade_facility(pool: &SqlitePool, club_id: i64, facility: &str) -
 
 pub async fn process_stadium_operations(pool: &SqlitePool) -> Result<(), String> { let rows:Vec<(i64,i64,f64)>=sqlx::query_as("SELECT so.stadium_id,so.condition,so.weekly_cost FROM stadium_operations so JOIN clubs c ON c.stadium_id=so.stadium_id").fetch_all(pool).await.map_err(|e|e.to_string())?;let(date,):(String,)=sqlx::query_as("SELECT game_date FROM game_state WHERE id=1").fetch_one(pool).await.map_err(|e|e.to_string())?;for(stadium,condition,cost)in rows{let club:Option<(i64,)>=sqlx::query_as("SELECT id FROM clubs WHERE stadium_id=?").bind(stadium).fetch_optional(pool).await.map_err(|e|e.to_string())?;if let Some((club_id,))=club{sqlx::query("UPDATE club_finances SET balance=balance-? WHERE club_id=?").bind(cost).bind(club_id).execute(pool).await.map_err(|e|e.to_string())?;sqlx::query("UPDATE stadium_operations SET condition=MAX(0,condition-1),last_maintenance=? WHERE stadium_id=?").bind(&date).bind(stadium).execute(pool).await.map_err(|e|e.to_string())?;if condition<=30{let _=sqlx::query("INSERT OR IGNORE INTO inbox_messages(club_id,sender_type,subject,body,date_sent,is_important) VALUES(?,'board','Mantenimiento urgente','El pabellón necesita mantenimiento para evitar pérdida de ingresos.',?,1)").bind(club_id).bind(&date).execute(pool).await;}}}Ok(())}
 
+pub fn merchandise_demand(reputation: i64, commercial_level: i64) -> i64 {
+    (reputation / 10 + 35 + (commercial_level.clamp(1, 5) - 1) * 5).clamp(10, 100)
+}
+
 pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
     let clubs: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM club_finances").fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (cid,) in clubs {
@@ -128,7 +132,8 @@ pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
         }
         sqlx::query("INSERT OR IGNORE INTO club_merchandising(club_id) VALUES(?)").bind(cid).execute(pool).await.map_err(|e| e.to_string())?;
         let (reputation,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(cid).fetch_one(pool).await.map_err(|e| e.to_string())?;
-        let demand = (reputation / 10 + 35).clamp(10, 100);
+        let (commercial_level,): (i64,) = sqlx::query_as("SELECT COALESCE(commercial_level,1) FROM club_facilities WHERE club_id=?").bind(cid).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((1,));
+        let demand = merchandise_demand(reputation, commercial_level);
         let (price, quality): (f64, i64) = sqlx::query_as("SELECT COALESCE(price,35), COALESCE(product_quality,60) FROM club_merchandising WHERE club_id=?").bind(cid).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((35.0,60));
         let units = ((demand as f64 * (quality as f64 / 100.0) * (40.0 / price.max(10.0))).round() as i64).clamp(1, 500);
         let revenue = units as f64 * price;
@@ -206,6 +211,13 @@ mod tests {
         assert!(upgrade_facility(&pool, club_id, "invalid").await.is_err());
         let (after,): (f64,) = sqlx::query_as("SELECT balance FROM club_finances WHERE club_id=?").bind(club_id).fetch_one(&pool).await.unwrap();
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn commercial_facility_increases_merchandise_demand() {
+        assert_eq!(merchandise_demand(500, 1), 85);
+        assert_eq!(merchandise_demand(500, 3), 95);
+        assert_eq!(merchandise_demand(900, 5), 100);
     }
 
     #[tokio::test]

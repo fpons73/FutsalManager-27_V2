@@ -50,13 +50,32 @@ pub async fn list(pool: &SqlitePool, club_id: i64) -> Result<Vec<YouthPlayerRow>
     Ok(rows.into_iter().map(|(id,team_id,team_name,age_group,name,nation,flag_path,second_flag_path,position,secondary_position,ca,pa,development)| YouthPlayerRow { id,team_id,team_name,age_group,name,nation,flag_path,second_flag_path,position,secondary_position,ca,pa,development,can_promote: age_group >= 18 && ca >= 45 }).collect())
 }
 
+pub fn facility_youth_gain(level: i64, age: i64) -> i64 {
+    let base = if age <= 16 { 2 } else { 1 };
+    base + (level.clamp(1, 5) - 1) / 2
+}
+
 pub async fn develop(pool: &SqlitePool, club_id: i64) -> Result<(), String> {
+    let (level,): (i64,) = sqlx::query_as("SELECT COALESCE(youth_level,1) FROM club_facilities WHERE club_id=?")
+        .bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((1,));
     let rows: Vec<(i64,i64,i64,i64)> = sqlx::query_as("SELECT yp.id,yp.current_ability,yp.potential_ability,yt.age_group FROM youth_players yp JOIN youth_teams yt ON yt.id=yp.youth_team_id WHERE yt.club_id=? AND yp.promoted_to_first_team=0").bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (id,_ca,_pa,age) in rows {
-        let gain = if age <= 16 { 2 } else if age <= 18 { 1 } else { 1 };
+        let gain = facility_youth_gain(level, age);
         sqlx::query("UPDATE youth_players SET current_ability=MIN(potential_ability,current_ability+?), development=development+? WHERE id=?").bind(gain).bind(gain as f64).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn academy_level_increases_daily_development() {
+        assert_eq!(facility_youth_gain(1, 16), 2);
+        assert_eq!(facility_youth_gain(3, 16), 3);
+        assert_eq!(facility_youth_gain(5, 18), 3);
+    }
 }
 
 pub async fn promote(pool: &SqlitePool, club_id: i64, youth_id: i64) -> Result<String, String> {

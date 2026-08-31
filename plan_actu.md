@@ -123,13 +123,15 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - [x] Crear este plan de actuación y establecer prioridades.
 - [x] Añadir persistencia del resultado del partido vivo y eventos al finalizar.
 - [ ] Añadir una pantalla de resumen postpartido.
+
+> Efectos de instalaciones integrados: entrenamiento +8% por nivel, cantera con desarrollo adicional por nivel y área comercial +5 puntos de demanda por nivel, con límites de seguridad.
 - [ ] Añadir controles mínimos de intervención durante el partido.
 - [x] Exponer visualmente el desenlace de prórroga y penaltis en calendario y resumen.
 - [x] Verificar build, typecheck y tests.
 
 ## Último hito económico
 
-- [x] Mejoras de instalaciones: niveles persistentes para entrenamiento, cantera y área comercial, compra transaccional con comprobación de saldo y actualización visible en Finanzas.
+- [x] Mejoras de instalaciones: niveles persistentes para entrenamiento, cantera y área comercial, compra transaccional con comprobación de saldo, efectos reales sobre progreso/demanda y actualización visible en Finanzas.
 
 - [x] Merchandising con demanda, ventas semanales, ingresos acumulados y métricas visibles en Finanzas.
 
