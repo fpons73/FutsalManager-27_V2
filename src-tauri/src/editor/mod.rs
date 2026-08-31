@@ -62,7 +62,7 @@ pub async fn list_clubs(pool: &SqlitePool) -> Result<Vec<ClubRow>, String> {
         reputation: i64, primary_color: String, secondary_color: String,
         crest_path: Option<String>, coach_id: Option<i64>, coach_name: Option<String>,
         staff_count: i64, squad_count: i64,
-        tactical_style: String, tactical_formation: String, tactical_tempo: i64, tactical_pressing: i64, tactical_defensive_line: i64, tactical_width: i64,
+        tactical_style: Option<String>, tactical_formation: Option<String>, tactical_tempo: Option<i64>, tactical_pressing: Option<i64>, tactical_defensive_line: Option<i64>, tactical_width: Option<i64>,
     }
     let rows = sqlx::query_as::<_, Cr>(
         "SELECT c.id, c.name, c.short_name, n.name AS nation, c.nation_id, ci.name AS city, c.city_id, s.name AS stadium, s.capacity, c.reputation, c.primary_color, c.secondary_color, c.crest_path, c.coach_id, coach.common_name AS coach_name,
@@ -71,7 +71,7 @@ pub async fn list_clubs(pool: &SqlitePool) -> Result<Vec<ClubRow>, String> {
                 (SELECT COUNT(*) FROM contracts ct WHERE ct.club_id=c.id AND ct.is_active=1) AS squad_count
          FROM clubs c JOIN nations n ON n.id=c.nation_id LEFT JOIN cities ci ON ci.id=c.city_id LEFT JOIN stadiums s ON s.id=c.stadium_id LEFT JOIN staff coach ON coach.id=c.coach_id LEFT JOIN tactics t ON t.club_id=c.id ORDER BY c.reputation DESC, c.name"
     ).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| ClubRow { id: r.id, name: r.name, short_name: r.short_name, nation: r.nation, nation_id: r.nation_id, city: r.city.unwrap_or_default(), city_id: r.city_id, stadium: r.stadium.unwrap_or_default(), capacity: r.capacity.unwrap_or(2000), reputation: r.reputation, primary_color: r.primary_color, secondary_color: r.secondary_color, crest_path: r.crest_path, coach_id: r.coach_id, coach_name: r.coach_name, staff_count: r.staff_count, squad_count: r.squad_count, tactical_style: r.tactical_style, tactical_formation: r.tactical_formation, tactical_tempo: r.tactical_tempo, tactical_pressing: r.tactical_pressing, tactical_defensive_line: r.tactical_defensive_line, tactical_width: r.tactical_width }).collect())
+    Ok(rows.into_iter().map(|r| ClubRow { id: r.id, name: r.name, short_name: r.short_name, nation: r.nation, nation_id: r.nation_id, city: r.city.unwrap_or_default(), city_id: r.city_id, stadium: r.stadium.unwrap_or_default(), capacity: r.capacity.unwrap_or(2000), reputation: r.reputation, primary_color: r.primary_color, secondary_color: r.secondary_color, crest_path: r.crest_path, coach_id: r.coach_id, coach_name: r.coach_name, staff_count: r.staff_count, squad_count: r.squad_count, tactical_style: r.tactical_style.unwrap_or_else(|| "balanced".into()), tactical_formation: r.tactical_formation.unwrap_or_else(|| "3-1".into()), tactical_tempo: r.tactical_tempo.unwrap_or(50), tactical_pressing: r.tactical_pressing.unwrap_or(50), tactical_defensive_line: r.tactical_defensive_line.unwrap_or(50), tactical_width: r.tactical_width.unwrap_or(50) }).collect())
 }
 pub async fn list_players(pool: &SqlitePool, limit: i64) -> Result<Vec<PlayerRow>, String> {
     let lim = limit.clamp(20, 2000);
