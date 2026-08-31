@@ -32,7 +32,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Sistema de selecciones nacionales con convocatorias, ventanas, grupos, simulación diaria, eliminatorias y palmarés persistente; formatos continentales avanzados pendientes.
 - Moral, felicidad, química, roles, capitanes, compatibilidad, promesas y conversaciones con jugadores.
 - Contratos avanzados, renovaciones, cláusulas, bonus, cesiones y jugadores libres.
-- Gestión funcional del staff y efecto de sus atributos.
+- Gestión funcional del staff y efecto de sus atributos; entrenador, asistentes, técnicos, cantera, ojeadores, fisio y preparador físico ya aportan efectos por puesto.
 - Tácticas durante el partido, cambios manuales y tiempos muertos.
 - Automatismos tácticos entrenables, configurables y aplicados contextualmente durante la simulación.
 - IA táctica reactiva y estilos persistentes por club.
@@ -70,7 +70,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 1. Contratos completos: salario, duración, bonus, cláusula y rol.
 2. Renovaciones, jugadores libres, cesiones y precontratos.
 3. Moral y felicidad conectadas a minutos, resultados, salario y promesas.
-4. Staff contratables con límites y efectos reales.
+4. Staff contratables con límites y efectos reales por puesto (entrenamiento, cantera, scouting y lesiones).
 5. Scouting:
    - asignación a país/región/club;
    - límites de scouts;

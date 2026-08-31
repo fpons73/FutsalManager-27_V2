@@ -13,6 +13,7 @@
 
 - [x] Moral y felicidad conectadas a resultados y dinámica semanal.
 - [ ] Confianza y satisfacción avanzada; las promesas individuales ya disponen de persistencia, validación y evaluación inicial.
+- [x] Staff de club con efectos por puesto en entrenamiento, cantera, scouting y prevención de lesiones; atributos y costes se mantienen configurables desde el Editor.
 - [x] Alertas contractuales de vencimiento y liberación automática de jugadores.
 
 > Progreso actual: moral, felicidad, química, cohesión, roles base y capitanes ya están implementados y validados.

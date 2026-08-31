@@ -69,6 +69,16 @@ pub fn facility_training_factor(level: i64) -> f64 {
     1.0 + (level.clamp(1, 5) - 1) as f64 * 0.08
 }
 
+pub fn staff_training_factor(coach: i64, assistant: i64, technical: i64, fitness: i64) -> f64 {
+    let technical_quality = (coach * 2 + assistant + technical).clamp(0, 80) as f64 / 80.0;
+    let fitness_quality = fitness.clamp(0, 20) as f64 / 20.0;
+    0.72 + technical_quality * 0.38 + fitness_quality * 0.10
+}
+
+pub fn staff_injury_risk_factor(physio: i64, fitness: i64) -> f64 {
+    (1.0 - (physio.clamp(0, 20) as f64 * 0.018 + fitness.clamp(0, 20) as f64 * 0.008)).clamp(0.55, 1.0)
+}
+
 pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Vec<String>, String> {
     // La cohesión crece con una semana completada; la química se aproxima a la media moral.
     sqlx::query("UPDATE club_dynamics SET cohesion=MIN(100, cohesion+1), chemistry=MIN(100, MAX(0, chemistry + CASE WHEN (SELECT AVG(morale) FROM player_states ps JOIN contracts c ON c.player_id=ps.player_id WHERE c.club_id=? AND c.is_active=1) > chemistry THEN 1 ELSE -1 END), updated_at=CURRENT_TIMESTAMP WHERE club_id=?").bind(club_id).bind(club_id).execute(pool).await.map_err(|e| e.to_string())?;
@@ -97,7 +107,7 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let dob_d = chrono::NaiveDate::parse_from_str(&dob, "%Y-%m-%d").unwrap_or(today);
         let age = ((today - dob_d).num_days()/365) as i64;
         let (prof,): (i64,) = sqlx::query_as("SELECT professionalism FROM player_attributes WHERE player_id=?").bind(pid).fetch_one(pool).await.map_err(|e| e.to_string())?;
-        let staff: (i64,i64,i64,i64,i64,i64) = sqlx::query_as("SELECT COALESCE(MAX(tactical),0),COALESCE(MAX(working_youngsters),0),COALESCE(MAX(physio_level),0),COALESCE(MAX(man_management),0),COALESCE(MAX(judging),0),COALESCE(MAX(motivating),0) FROM staff WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let staff: (i64,i64,i64,i64) = sqlx::query_as("SELECT COALESCE(MAX(CASE WHEN role='coach' THEN tactical END),0),COALESCE(MAX(CASE WHEN role='assistant' THEN man_management END),0),COALESCE(MAX(CASE WHEN role IN ('technical_coach','goalkeeper_coach') THEN tactical END),0),COALESCE(MAX(CASE WHEN role='fitness_coach' THEN physio_level END),0) FROM staff WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
         let (training_level,): (i64,) = sqlx::query_as("SELECT COALESCE(training_level,1) FROM club_facilities WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((1,));
 
         if ca >= pa { continue; }
@@ -114,7 +124,7 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         let prof_factor = prof as f64 / 12.0;
         let avg_intensity: f64 = schedule.iter().map(|s| s.intensity as f64).sum::<f64>() / schedule.len() as f64 / 80.0;
 
-        let staff_factor = 0.75 + (staff.0.max(staff.1) as f64 / 20.0) * 0.5;
+        let staff_factor = staff_training_factor(staff.0, staff.1, staff.2, staff.3);
         let improvement = 0.12 * age_factor * pot_factor * prof_factor * avg_intensity * staff_factor * facility_training_factor(training_level);
         if improvement < 0.02 { continue; }
 
@@ -131,7 +141,8 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
             sqlx::query(&q).bind(pid).execute(pool).await.map_err(|e| e.to_string())?;
         }
 
-        let injury_risk = (0.008 * (1.25 - staff.2 as f64 / 40.0)).clamp(0.001, 0.012);
+        let (physio, fitness): (i64, i64) = sqlx::query_as("SELECT COALESCE(MAX(CASE WHEN role='physio' THEN physio_level END),0),COALESCE(MAX(CASE WHEN role='fitness_coach' THEN physio_level END),0) FROM staff WHERE club_id=?").bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let injury_risk = (0.008 * staff_injury_risk_factor(physio, fitness)).clamp(0.001, 0.012);
         if rand::random::<f64>() < injury_risk {
             let types = ["Tobillo","Rodilla","Isquiotibial","Gemelo","Hombro"];
             let t = types[rand::random::<usize>() % types.len()];
@@ -144,6 +155,25 @@ pub async fn process_training_week(pool: &SqlitePool, club_id: i64) -> Result<Ve
         }
     }
     Ok(logs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn staff_quality_improves_training_without_exceeding_expected_range() {
+        let none = staff_training_factor(0, 0, 0, 0);
+        let elite = staff_training_factor(20, 20, 20, 20);
+        assert!(elite > none);
+        assert!((0.72..=1.24).contains(&elite));
+    }
+
+    #[test]
+    fn physio_and_fitness_reduce_injury_risk() {
+        assert!(staff_injury_risk_factor(20, 20) < staff_injury_risk_factor(0, 0));
+        assert!((0.55..=1.0).contains(&staff_injury_risk_factor(20, 20)));
+    }
 }
 
 pub async fn get_progress(pool: &SqlitePool, club_id: i64) -> Result<Vec<ProgressRow>, String> {

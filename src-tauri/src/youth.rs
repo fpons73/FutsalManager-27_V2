@@ -51,16 +51,22 @@ pub async fn list(pool: &SqlitePool, club_id: i64) -> Result<Vec<YouthPlayerRow>
 }
 
 pub fn facility_youth_gain(level: i64, age: i64) -> i64 {
+    facility_youth_gain_with_staff(level, age, 0)
+}
+
+pub fn facility_youth_gain_with_staff(level: i64, age: i64, working_youngsters: i64) -> i64 {
     let base = if age <= 16 { 2 } else { 1 };
-    base + (level.clamp(1, 5) - 1) / 2
+    base + (level.clamp(1, 5) - 1) / 2 + (working_youngsters.clamp(0, 20) / 10)
 }
 
 pub async fn develop(pool: &SqlitePool, club_id: i64) -> Result<(), String> {
     let (level,): (i64,) = sqlx::query_as("SELECT COALESCE(youth_level,1) FROM club_facilities WHERE club_id=?")
         .bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((1,));
+    let (working_youngsters,): (i64,) = sqlx::query_as("SELECT COALESCE(MAX(working_youngsters),0) FROM staff WHERE club_id=? AND role IN ('coach','assistant','technical_coach','goalkeeper_coach')")
+        .bind(club_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
     let rows: Vec<(i64,i64,i64,i64)> = sqlx::query_as("SELECT yp.id,yp.current_ability,yp.potential_ability,yt.age_group FROM youth_players yp JOIN youth_teams yt ON yt.id=yp.youth_team_id WHERE yt.club_id=? AND yp.promoted_to_first_team=0").bind(club_id).fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (id,_ca,_pa,age) in rows {
-        let gain = facility_youth_gain(level, age);
+        let gain = facility_youth_gain_with_staff(level, age, working_youngsters);
         sqlx::query("UPDATE youth_players SET current_ability=MIN(potential_ability,current_ability+?), development=development+? WHERE id=?").bind(gain).bind(gain as f64).bind(id).execute(pool).await.map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -75,6 +81,7 @@ mod tests {
         assert_eq!(facility_youth_gain(1, 16), 2);
         assert_eq!(facility_youth_gain(3, 16), 3);
         assert_eq!(facility_youth_gain(5, 18), 3);
+        assert_eq!(facility_youth_gain_with_staff(1, 18, 10), 2);
     }
 }
 
