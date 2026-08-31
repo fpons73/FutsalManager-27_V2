@@ -28,6 +28,7 @@
 - [ ] Automatismos tácticos avanzados por contexto y rival.
 - [x] IA táctica reactiva de los equipos controlados por la máquina: ajustes por marcador, fase, faltas y fatiga, con cambios espaciados.
 - [x] Estilos tácticos persistentes por club aplicados a ritmo, presión, bloque y amplitud.
+- [x] Plan inicial de IA ajustado por calidad relativa, localía y competición.
 - [x] Configuración de estilos tácticos disponible en el Editor antes de iniciar la partida.
 
 ## Prioridad 2 — Competiciones completas

@@ -133,6 +133,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - [x] Cargar el estilo táctico persistente de cada club en simulación y partidos en vivo.
 - [x] Ajustar ritmo, presión, bloque y amplitud según el estilo configurado.
 - [x] Mantener la reacción contextual de marcador, faltas y fatiga sobre la base del estilo.
+- [x] Ajustar el plan inicial por diferencia de calidad, localía y tipo de competición.
 
 - [x] Evaluar el contexto del partido cada intervalo de juego.
 - [x] Cambiar a un plan ofensivo si la IA pierde en el tramo final.

@@ -862,6 +862,18 @@ fn formation_code_value(f: &str) -> u8 {
     match f { "4-0" => 1, "2-2" => 2, "5-0" => 3, _ => 0 }
 }
 
+pub fn contextual_tactics(base: EngineTactics, style: &str, own_quality: i64, opponent_quality: i64, is_home: bool, competition_type: &str) -> EngineTactics {
+    let mut tactics = tactics_for_style(base, style);
+    let gap = own_quality - opponent_quality;
+    let difficult = gap < -80;
+    let strong = gap > 80;
+    if !is_home { tactics.defensive_line = (tactics.defensive_line - 3.0).max(0.0); }
+    if difficult { tactics.pressing = (tactics.pressing + 6.0).min(100.0); tactics.tempo = (tactics.tempo + 4.0).min(100.0); }
+    if strong { tactics.tempo = (tactics.tempo - 3.0).max(0.0); }
+    if competition_type == "cup" { tactics.pressing = (tactics.pressing + 3.0).min(100.0); }
+    tactics
+}
+
 pub fn tactics_for_style(base: EngineTactics, style: &str) -> EngineTactics {
     match style {
         "counter" => EngineTactics { tempo: (base.tempo + 8.0).min(100.0), pressing: (base.pressing - 8.0).max(0.0), defensive_line: (base.defensive_line - 8.0).max(0.0), ..base },
@@ -995,10 +1007,12 @@ async fn simulate_clubs_with_context(pool: &sqlx::SqlitePool, home_club: i64, aw
         [(0, hn, hc), (1, an, ac)],
         [r1, r2],
     );
-    for (team, club_id) in [(0, home_club), (1, away_club)] {
+    let (home_quality,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home_club).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let (away_quality,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(away_club).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    for (team, club_id, own_quality, opponent_quality, is_home) in [(0, home_club, home_quality, away_quality, true), (1, away_club, away_quality, home_quality, false)] {
         if let Some((formation, tempo, pressing, defensive_line, width, style)) = sqlx::query_as::<_, (String, i64, i64, i64, i64, String)>("SELECT formation,tempo,pressing,defensive_line,width,COALESCE(playing_style,'balanced') FROM tactics WHERE club_id=?").bind(club_id).fetch_optional(pool).await.map_err(|e| e.to_string())? {
             let base = EngineTactics { formation: formation_code_value(&formation), tempo: tempo as f32, pressing: pressing as f32, defensive_line: defensive_line as f32, width: width as f32 };
-            eng.set_tactics(team, tactics_for_style(base, &style));
+            eng.set_tactics(team, contextual_tactics(base, &style, own_quality, opponent_quality, is_home, if knockout { "cup" } else { "league" }));
         }
     }
     if knockout {
@@ -1089,6 +1103,9 @@ mod tests {
         assert!(counter.tempo > base.tempo && counter.defensive_line < base.defensive_line);
         assert!(possession.width > base.width && possession.pressing > base.pressing);
         assert_eq!(tactics_for_style(base, "balanced").tempo, base.tempo);
+        let difficult_away = contextual_tactics(base, "balanced", 500, 800, false, "league");
+        assert!(difficult_away.pressing > base.pressing);
+        assert!(difficult_away.defensive_line < base.defensive_line);
     }
 
     #[test]

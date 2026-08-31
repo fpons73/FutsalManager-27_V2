@@ -238,7 +238,9 @@ pub async fn start_live_match_tactics(
     ).bind(away).fetch_optional(&pool).await.map_err(|e| e.to_string())?;
     if let Some((af, at, ap, ad, aw, style)) = away_tac {
         let base = EngineTactics { formation: formation_code(&af), tempo: at as f32, pressing: ap as f32, defensive_line: ad as f32, width: aw as f32 };
-        eng.set_tactics(1, crate::engine::tactics_for_style(base, &style));
+        let (home_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+        let (away_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(away).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+        eng.set_tactics(1, crate::engine::contextual_tactics(base, &style, away_rep, home_rep, false, "league"));
     }
     eng.start();
     let snap = eng.snapshot();
@@ -267,7 +269,9 @@ pub async fn start_live_match(state: State<'_, AppState>, match_id: i64) -> Resu
     let mut eng = MatchEngine::new([(0, hn, hc), (1, an, ac)], [r1, r2]);
     if let Some((formation, tempo, pressing, defensive_line, width, style)) = sqlx::query_as::<_, (String, i64, i64, i64, i64, String)>("SELECT formation,tempo,pressing,defensive_line,width,COALESCE(playing_style,'balanced') FROM tactics WHERE club_id=?").bind(away).fetch_optional(&pool).await.map_err(|e| e.to_string())? {
         let base = EngineTactics { formation: formation_code(&formation), tempo: tempo as f32, pressing: pressing as f32, defensive_line: defensive_line as f32, width: width as f32 };
-        eng.set_tactics(1, crate::engine::tactics_for_style(base, &style));
+        let (home_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+        let (away_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(away).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+        eng.set_tactics(1, crate::engine::contextual_tactics(base, &style, away_rep, home_rep, false, "league"));
     }
     eng.start();
     let snap = eng.snapshot();
