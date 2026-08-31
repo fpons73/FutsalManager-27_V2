@@ -130,6 +130,41 @@ pub fn merchandise_demand(reputation: i64, commercial_level: i64) -> i64 {
     (reputation / 10 + 35 + (commercial_level.clamp(1, 5) - 1) * 5).clamp(10, 100)
 }
 
+pub fn reputation_delta(home_reputation: i64, away_reputation: i64, home_goals: i64, away_goals: i64, club_is_home: bool) -> i64 {
+    let won = if club_is_home { home_goals > away_goals } else { away_goals > home_goals };
+    let drawn = home_goals == away_goals;
+    let own = if club_is_home { home_reputation } else { away_reputation };
+    let opponent = if club_is_home { away_reputation } else { home_reputation };
+    let expected_gap = ((opponent - own) / 100).clamp(-5, 5);
+    let base = if won { 2 } else if drawn { 0 } else { -2 };
+    let upset_bonus = if won { expected_gap.max(0) } else if !drawn { (-expected_gap).max(0) } else { 0 };
+    (base + upset_bonus).clamp(-5, 5)
+}
+
+pub async fn apply_match_reputation(pool: &SqlitePool, match_id: i64, home_id: i64, away_id: i64, home_goals: i64, away_goals: i64, date: &str) -> Result<(), String> {
+    let (home_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let (away_rep,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(away_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+    let home_delta = reputation_delta(home_rep, away_rep, home_goals, away_goals, true);
+    let away_delta = reputation_delta(home_rep, away_rep, home_goals, away_goals, false);
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    for (club_id, result, delta) in [(home_id, if home_goals > away_goals { "win" } else if home_goals == away_goals { "draw" } else { "loss" }, home_delta), (away_id, if away_goals > home_goals { "win" } else if home_goals == away_goals { "draw" } else { "loss" }, away_delta)] {
+        let inserted = sqlx::query("INSERT OR IGNORE INTO match_reputation_impacts(match_id,club_id,result,reputation_delta,created_at) VALUES(?,?,?,?,?)")
+            .bind(match_id).bind(club_id).bind(result).bind(delta).bind(date).execute(&mut *tx).await.map_err(|e| e.to_string())?.rows_affected();
+        if inserted > 0 {
+            sqlx::query("UPDATE clubs SET reputation=MAX(1,MIN(10000,reputation+?)) WHERE id=?").bind(delta).bind(club_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+            let result_label = if result == "win" { "Victoria" } else if result == "draw" { "Empate" } else { "Derrota" };
+            let direction = if delta > 0 { "sube" } else if delta < 0 { "baja" } else { "se mantiene" };
+            let headline = format!("{}: reputación {}", result_label, direction);
+            let signed_delta = if delta > 0 { format!("+{}", delta) } else { delta.to_string() };
+            let body = format!("El resultado {}-{} hace que la reputación {} {} puntos.", home_goals, away_goals, direction, signed_delta);
+            sqlx::query("INSERT OR IGNORE INTO world_news(club_id,news_type,headline,body,date,importance) VALUES(?,'reputation',?,?,?,?)")
+                .bind(club_id).bind(headline).bind(body).bind(date).bind((delta.abs() >= 3) as i64).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub async fn process_weekly_finances(pool: &SqlitePool) -> Result<(), String> {
     let clubs: Vec<(i64,)> = sqlx::query_as("SELECT club_id FROM club_finances").fetch_all(pool).await.map_err(|e| e.to_string())?;
     for (cid,) in clubs {
@@ -254,6 +289,13 @@ mod tests {
     }
 
     #[test]
+    fn results_change_reputation_by_expectation() {
+        assert!(reputation_delta(500, 800, 2, 0, true) > reputation_delta(800, 500, 2, 0, true));
+        assert_eq!(reputation_delta(700, 700, 1, 1, true), 0);
+        assert_eq!(reputation_delta(700, 700, 0, 1, true), -2);
+    }
+
+    #[test]
     fn ticket_demand_reacts_to_price_and_competition() {
         let league = ticket_demand(700, 600, "league", 12.0, 85);
         let cup = ticket_demand(700, 600, "cup", 12.0, 85);
@@ -298,6 +340,20 @@ mod tests {
         assert_eq!(first_payments, 1);
         assert_eq!(second_payments, 1);
         assert!((first_balance - second_balance).abs() < 0.01, "reprocesar la misma semana no debe cambiar el balance");
+    }
+
+    #[tokio::test]
+    async fn match_reputation_is_recorded_once_per_club() {
+        let pool = db::init_memory_pool().await.unwrap();
+        world::seed_world(&pool).await.unwrap();
+        let (match_id, home_id, away_id): (i64, i64, i64) = sqlx::query_as("SELECT id,home_club_id,away_club_id FROM matches LIMIT 1").fetch_one(&pool).await.unwrap();
+        let (before,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home_id).fetch_one(&pool).await.unwrap();
+        apply_match_reputation(&pool, match_id, home_id, away_id, 3, 0, "2026-07-10").await.unwrap();
+        apply_match_reputation(&pool, match_id, home_id, away_id, 3, 0, "2026-07-10").await.unwrap();
+        let (after,): (i64,) = sqlx::query_as("SELECT reputation FROM clubs WHERE id=?").bind(home_id).fetch_one(&pool).await.unwrap();
+        let (entries,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM match_reputation_impacts WHERE match_id=?").bind(match_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(entries, 2);
+        assert_eq!(after - before, reputation_delta(before, sqlx::query_as::<_,(i64,)>("SELECT reputation FROM clubs WHERE id=?").bind(away_id).fetch_one(&pool).await.unwrap().0, 3, 0, true));
     }
 
     #[tokio::test]

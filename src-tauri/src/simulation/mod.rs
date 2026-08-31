@@ -58,6 +58,7 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         sqlx::query("UPDATE matches SET status='finished', home_score=?, away_score=?, home_shots=?, away_shots=?, home_fouls=?, away_fouls=?, home_possession=?, away_possession=? WHERE id=?")
             .bind(home_goals).bind(away_goals).bind(home_shots).bind(away_shots).bind(home_fouls).bind(away_fouls).bind(snap.possession[0] as i64).bind(snap.possession[1] as i64).bind(mid)
             .execute(pool).await.map_err(|e| e.to_string())?;
+        crate::finance::apply_match_reputation(pool, mid, hid, aid, home_goals, away_goals, &cur_date).await?;
 
         persist_player_statistics(pool, mid, comp_id, &snap, hid, aid).await?;
 

@@ -91,7 +91,7 @@
 - [x] Ofertas negociables de derechos televisivos con firma y vencimiento.
 - [x] Mejoras de instalaciones de entrenamiento, cantera y área comercial, con niveles, inversión y efectos aplicados a progreso, cantera y demanda comercial.
 - [x] Demanda dinámica y precios de entradas, con asistencia e ingresos persistentes por partido.
-- [ ] Repercusión económica de resultados y reputación.
+- [x] Repercusión económica de resultados y reputación, con variación idempotente por partido, noticias y efecto sobre taquilla y merchandising.
 
 ## Prioridad 7 — Editor completo
 

@@ -40,7 +40,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 - Historial de temporadas, palmarés, récords y evolución de jugadores.
 - Noticias, medios, rumores y reputación pública.
 - Confianza, paciencia y objetivos iniciales de la directiva con evaluación semanal.
-- Economía avanzada: mantenimiento operativo del pabellón, desglose semanal de staff, viajes visitantes, merchandising, derechos televisivos, patrocinadores, mejoras de instalaciones y taquilla dinámica implementados; área Comercial integrada con ofertas de patrocinio y televisión.
+- Economía avanzada: mantenimiento operativo del pabellón, desglose semanal de staff, viajes visitantes, merchandising, derechos televisivos, patrocinadores, mejoras de instalaciones, taquilla dinámica e impacto de resultados sobre reputación implementados; área Comercial integrada con ofertas de patrocinio y televisión.
 - Optimización medida: benchmarks, virtualización, cache, LOD y carga bajo demanda.
 - Tutorial, objetivos de directiva, logros y pulido de errores/estados vacíos.
 
@@ -133,6 +133,7 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 
 - [x] Mejoras de instalaciones: niveles persistentes para entrenamiento, cantera y área comercial, compra transaccional con comprobación de saldo, efectos reales sobre progreso/demanda y actualización visible en Finanzas.
 - [x] Taquilla dinámica: precio configurable, demanda según rival/competición/estado del pabellón y registro idempotente de asistencia e ingresos por partido.
+- [x] Reputación económica: resultados y fuerza relativa del rival modifican la reputación del club una sola vez por partido, afectando la demanda futura.
 
 - [x] Merchandising con demanda, ventas semanales, ingresos acumulados y métricas visibles en Finanzas.
 
