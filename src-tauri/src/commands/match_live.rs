@@ -314,6 +314,27 @@ async fn persist_finished_match(pool: &sqlx::SqlitePool, info: &LiveMatchInfo, s
         sqlx::query("INSERT INTO player_season_stats(season,competition_id,player_id,club_id,appearances,starts,minutes_played,goals,assists,shots,shots_on_target,fouls_committed,rating_total,clean_sheets,saves) SELECT ?,m.competition_id,?,?,?,?,?,?,?,?,?,?,? FROM matches m WHERE m.id=? ON CONFLICT(season,competition_id,player_id) DO UPDATE SET appearances=appearances+excluded.appearances,starts=starts+excluded.starts,minutes_played=minutes_played+excluded.minutes_played,goals=goals+excluded.goals,shots=shots+excluded.shots,shots_on_target=shots_on_target+excluded.shots_on_target,fouls_committed=fouls_committed+excluded.fouls_committed,rating_total=rating_total+excluded.rating_total")
             .bind(&season.0).bind(p.id as i64).bind(club_id).bind((minutes > 0) as i64).bind(p.on_pitch as i64).bind(minutes).bind(goals).bind(assists).bind(shots).bind(shots_on).bind(fouls).bind(6.0_f64).bind(0_i64).bind(0_i64).bind(info.match_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
     }
+    if competition_type != "league" {
+        let tie: Option<(i64, i64, i64, i64, i64)> = sqlx::query_as("SELECT id, leg, home_club_id, away_club_id, COALESCE(winner_club_id,0) FROM cup_ties WHERE match_id=?")
+            .bind(info.match_id).fetch_optional(&mut *tx).await.map_err(|e| e.to_string())?;
+        if let Some((tie_id, leg, home_id, away_id, _)) = tie {
+            let (two_legs,): (i64,) = sqlx::query_as("SELECT knockout_two_legs FROM competitions c JOIN matches m ON m.competition_id=c.id WHERE m.id=?")
+                .bind(info.match_id).fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
+            if two_legs != 0 && leg == 2 {
+                let (prior_home, prior_away): (i64, i64) = sqlx::query_as("SELECT COALESCE(first_match.home_score,0), COALESCE(first_match.away_score,0) FROM cup_ties current_leg LEFT JOIN cup_ties first_leg ON first_leg.competition_id=current_leg.competition_id AND first_leg.season=current_leg.season AND first_leg.round=current_leg.round AND first_leg.leg=1 LEFT JOIN matches first_match ON first_match.id=first_leg.match_id WHERE current_leg.id=?")
+                    .bind(tie_id).fetch_one(&mut *tx).await.map_err(|e| e.to_string())?;
+                let aggregate_home = prior_home + snapshot.score[1] as i64;
+                let aggregate_away = prior_away + snapshot.score[0] as i64;
+                let aggregate_tie = aggregate_home == aggregate_away;
+                let winner = if aggregate_home > aggregate_away { info.away_club_id } else if aggregate_away > aggregate_home { info.home_club_id } else if snapshot.penalty_score[0] > snapshot.penalty_score[1] { info.home_club_id } else { info.away_club_id };
+                sqlx::query("UPDATE cup_ties SET aggregate_home_score=?, aggregate_away_score=?, winner_club_id=?, went_to_extra_time=?, went_to_penalties=?, penalty_home_score=?, penalty_away_score=? WHERE id=?")
+                    .bind(aggregate_home).bind(aggregate_away).bind(winner).bind(snapshot.went_to_extra_time as i64).bind((aggregate_tie || snapshot.went_to_penalties) as i64).bind(snapshot.penalty_score[0] as i64).bind(snapshot.penalty_score[1] as i64).bind(tie_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+            } else {
+                sqlx::query("UPDATE cup_ties SET winner_club_id=CASE WHEN ? > ? THEN home_club_id WHEN ? > ? THEN away_club_id ELSE winner_club_id END, went_to_extra_time=?, went_to_penalties=?, penalty_home_score=?, penalty_away_score=? WHERE id=?")
+                    .bind(snapshot.score[0] as i64).bind(snapshot.score[1] as i64).bind(snapshot.score[1] as i64).bind(snapshot.score[0] as i64).bind(snapshot.went_to_extra_time as i64).bind(snapshot.went_to_penalties as i64).bind(snapshot.penalty_score[0] as i64).bind(snapshot.penalty_score[1] as i64).bind(tie_id).execute(&mut *tx).await.map_err(|e| e.to_string())?;
+            }
+        }
+    }
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -349,12 +370,29 @@ pub async fn tick_live(state: State<'_, AppState>, ticks: Option<u32>) -> Result
         guard.clone().ok_or("No hay partida activa")?
     };
     let n = ticks.unwrap_or(1) as usize;
+    let live_match_id = state.live_match_info.lock().map_err(|e| e.to_string())?.as_ref().map(|i| i.match_id).ok_or("Falta información del partido")?;
+    let (competition_type,): (String,) = sqlx::query_as("SELECT c.competition_type FROM competitions c JOIN matches m ON m.competition_id=c.id WHERE m.id=?")
+        .bind(live_match_id).fetch_one(&pool).await.map_err(|e| e.to_string())?;
+    let (knockout_decider, aggregate_before) = if competition_type != "league" {
+        let tie: Option<(i64, i64, i64, i64, i64, i64)> = sqlx::query_as("SELECT current_leg.leg, (SELECT knockout_two_legs FROM competitions WHERE id=current_leg.competition_id), COALESCE(first_match.home_score,0), COALESCE(first_match.away_score,0), COALESCE(first_leg.home_club_id,0), COALESCE(first_leg.away_club_id,0) FROM cup_ties current_leg LEFT JOIN cup_ties first_leg ON first_leg.competition_id=current_leg.competition_id AND first_leg.season=current_leg.season AND first_leg.round=current_leg.round AND first_leg.leg=1 LEFT JOIN matches first_match ON first_match.id=first_leg.match_id WHERE current_leg.match_id=?")
+            .bind(live_match_id).fetch_optional(&pool).await.map_err(|e| e.to_string())?;
+        match tie {
+            Some((leg, two_legs, prior_home, prior_away, _first_home, _first_away)) => (two_legs == 0 || leg == 2, Some((prior_home, prior_away, leg, two_legs))),
+            None => (true, None),
+        }
+    } else { (false, None) };
     let (snapshot, finished) = {
         let mut guard = state.live_match.lock().map_err(|e| e.to_string())?;
         let eng = guard.as_mut().ok_or("No hay partido en vivo")?;
         for _ in 0..n {
             eng.tick();
             if eng.state == crate::engine::MatchState::Finished { break; }
+        }
+        if eng.state == crate::engine::MatchState::Finished && knockout_decider {
+            let resolve_tie = aggregate_before.map(|(prior_home, prior_away, leg, two_legs)| {
+                two_legs == 0 || leg != 2 || prior_home + eng.score[1] as i64 == prior_away + eng.score[0] as i64
+            }).unwrap_or(true);
+            if resolve_tie { eng.resolve_knockout_tie_forced(); }
         }
         (eng.snapshot(), eng.state == crate::engine::MatchState::Finished)
     };

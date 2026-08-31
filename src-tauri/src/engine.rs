@@ -160,6 +160,9 @@ pub struct MatchSnapshot {
     pub half: u8,
     pub time_seconds: u32,
     pub score: [u8; 2],
+    pub went_to_extra_time: bool,
+    pub went_to_penalties: bool,
+    pub penalty_score: [u8; 2],
     pub fouls: [u8; 2],
     pub shots: [u32; 2],
     pub yellow_cards: [u8; 2],
@@ -678,6 +681,28 @@ impl MatchEngine {
     }
 
     pub fn simulate_full(&mut self) -> MatchSnapshot {
+        self.simulate_until_finished();
+        self.snapshot()
+    }
+
+    pub fn simulate_full_knockout(&mut self) -> MatchSnapshot {
+        self.simulate_full_knockout_if(true)
+    }
+
+    pub fn simulate_full_knockout_if(&mut self, resolve_tie: bool) -> MatchSnapshot {
+        self.simulate_until_finished();
+        if resolve_tie {
+            self.resolve_knockout_tie_forced();
+            self.events.push(MatchEvent {
+                minute: 45, second: 0, kind: "finished".into(), team_id: 0, player_id: None,
+                assist_player_id: None, description: format!("Final {}-{}", self.score[0], self.score[1]),
+                x: 20.0, y: 10.0,
+            });
+        }
+        self.snapshot()
+    }
+
+    fn simulate_until_finished(&mut self) {
         self.start();
         while self.state != MatchState::Finished {
             if self.state == MatchState::HalfTime {
@@ -690,7 +715,6 @@ impl MatchEngine {
             }
             self.tick();
         }
-        self.snapshot()
     }
 
     pub fn player_stats(&self) -> Vec<(u32, u32, bool, u32, u32, u32, u32, u32, u32, u32, u32, f64)> {
@@ -725,6 +749,11 @@ impl MatchEngine {
 
     pub fn resolve_knockout_tie(&mut self) {
         if self.score[0] != self.score[1] { return; }
+        self.resolve_knockout_tie_forced();
+    }
+
+    pub fn resolve_knockout_tie_forced(&mut self) {
+        if self.went_to_extra_time { return; }
         self.went_to_extra_time = true;
         self.events.push(MatchEvent { minute: 40, second: 0, kind: "extra_time".into(), team_id: 0, player_id: None, assist_player_id: None, description: "Comienza la prórroga".into(), x: 20.0, y: 10.0 });
         for _ in 0..self.rules.extra_time_seconds {
@@ -760,6 +789,9 @@ impl MatchEngine {
             half: self.half,
             time_seconds: self.time,
             score: self.score,
+            went_to_extra_time: self.went_to_extra_time,
+            went_to_penalties: self.went_to_penalties,
+            penalty_score: self.penalty_score,
             fouls: self.fouls,
             shots: self.shots,
             yellow_cards: self.yellow_cards,
@@ -858,6 +890,18 @@ fn should_substitute(stamina: f32, time: u32) -> bool {
 }
 
 pub async fn simulate_clubs(pool: &sqlx::SqlitePool, home_club: i64, away_club: i64) -> Result<MatchSnapshot, String> {
+    simulate_clubs_with_knockout(pool, home_club, away_club, false).await
+}
+
+pub async fn simulate_clubs_with_knockout(pool: &sqlx::SqlitePool, home_club: i64, away_club: i64, knockout: bool) -> Result<MatchSnapshot, String> {
+    simulate_clubs_with_context(pool, home_club, away_club, knockout, None).await
+}
+
+pub async fn simulate_clubs_with_aggregate(pool: &sqlx::SqlitePool, home_club: i64, away_club: i64, aggregate_before: (i64, i64)) -> Result<MatchSnapshot, String> {
+    simulate_clubs_with_context(pool, home_club, away_club, true, Some(aggregate_before)).await
+}
+
+async fn simulate_clubs_with_context(pool: &sqlx::SqlitePool, home_club: i64, away_club: i64, knockout: bool, aggregate_before: Option<(i64, i64)>) -> Result<MatchSnapshot, String> {
     let home_row: Option<(String, String)> = sqlx::query_as("SELECT name, primary_color FROM clubs WHERE id=?")
         .bind(home_club).fetch_optional(pool).await.map_err(|e| e.to_string())?;
     let away_row: Option<(String, String)> = sqlx::query_as("SELECT name, primary_color FROM clubs WHERE id=?")
@@ -886,7 +930,23 @@ pub async fn simulate_clubs(pool: &sqlx::SqlitePool, home_club: i64, away_club: 
         [(0, hn, hc), (1, an, ac)],
         [r1, r2],
     );
-    Ok(eng.simulate_full())
+    if knockout {
+        eng.simulate_full();
+        let resolve_tie = aggregate_before.map(|(prior_home, prior_away)| {
+            prior_home + eng.score[1] as i64 == prior_away + eng.score[0] as i64
+        }).unwrap_or(eng.score[0] == eng.score[1]);
+        if resolve_tie {
+            eng.resolve_knockout_tie_forced();
+            eng.events.push(MatchEvent {
+                minute: 45, second: 0, kind: "finished".into(), team_id: 0, player_id: None,
+                assist_player_id: None, description: format!("Final {}-{}", eng.score[0], eng.score[1]),
+                x: 20.0, y: 10.0,
+            });
+        }
+        Ok(eng.snapshot())
+    } else {
+        Ok(eng.simulate_full())
+    }
 }
 
 #[cfg(test)]
@@ -930,6 +990,24 @@ mod tests {
         assert!(p_close > p_far, "cerca ({p_close}) > lejos ({p_far})");
         assert!(p_close > 0.3);
         assert!(p_far < 0.1);
+    }
+
+    #[test]
+    fn knockout_tie_resolves_with_extra_time_or_penalties() {
+        let roster: Vec<(u32,u8,Role,PlayerAttrs)> = (1..=12)
+            .map(|i| (i, i as u8, if i <= 2 { Role::POR } else { Role::ALA }, mk_attrs(110, Role::ALA)))
+            .collect();
+        let mut eng = MatchEngine::new(
+            [(0, "A".into(), "#f00".into()), (1, "B".into(), "#00f".into())],
+            [roster.clone(), roster],
+        ).with_seed(7);
+        let snap = eng.simulate_full_knockout_if(true);
+        assert!(snap.went_to_extra_time);
+        assert!(snap.score[0] != snap.score[1] || snap.went_to_penalties);
+        if snap.went_to_penalties {
+            assert_ne!(snap.penalty_score[0], snap.penalty_score[1]);
+            assert!(snap.events.iter().any(|event| event.kind == "penalties"));
+        }
     }
 
     #[test]

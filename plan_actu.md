@@ -58,11 +58,12 @@ Convertir el prototipo jugable actual en un manager de futsal profundo, coherent
 1. Persistir el resultado y eventos del partido en SQLite al finalizar.
 2. Pantalla postpartido con estadísticas de equipos y jugadores.
 3. Mantener visibles prórroga y penaltis en calendario y resumen.
-3. Cambios manuales durante el partido.
-4. Tiempos muertos por parte.
-5. Cambios de formación e instrucciones en vivo.
-6. Alertas de faltas, fatiga, tarjetas y powerplay.
-7. IA con decisiones según marcador, tiempo y fatiga.
+4. Prórroga y penaltis integrados en simulación automática y partidos en vivo, con desempate del global en eliminatorias a doble partido.
+5. Cambios manuales durante el partido.
+6. Tiempos muertos por parte.
+7. Cambios de formación e instrucciones en vivo.
+8. Alertas de faltas, fatiga, tarjetas y powerplay.
+9. IA con decisiones según marcador, tiempo y fatiga.
 
 ### Fase 2 — Mercado y plantilla profundos
 

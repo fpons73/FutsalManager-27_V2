@@ -34,7 +34,7 @@
 - [x] Desempates por enfrentamiento directo, aplicados al recalcular la clasificación según los partidos entre equipos empatados.
 - [x] Reglas específicas de clasificación por competición: criterios configurables de desempate iniciales.
 - [x] Calendarios que eviten solapamientos y saturación de partidos; los partidos programados respetan una separación mínima de 48 horas por club.
-- [ ] Prórroga y penaltis plenamente integrados en todos los flujos.
+- [x] Prórroga y penaltis plenamente integrados en partidos automáticos y en vivo; las eliminatorias a doble partido solo los aplican si el global queda empatado.
 
 ## Prioridad 3 — Selecciones nacionales
 

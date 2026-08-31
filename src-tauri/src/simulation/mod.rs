@@ -46,7 +46,18 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
         let distance_km = estimate_travel_distance(origin_city, destination_city, origin_nation != destination_nation);
         let travel_cost = 450.0 + distance_km * 0.85;
         crate::finance::add_travel_cost(pool, mid, aid, origin_city, destination_city, distance_km, travel_cost, &cur_date).await?;
-        let snap = crate::engine::simulate_clubs(pool, hid, aid).await?;
+        let (competition_type,): (String,) = sqlx::query_as("SELECT competition_type FROM competitions WHERE id=?")
+            .bind(comp_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
+        let tie_info: Option<(i64, i64)> = sqlx::query_as("SELECT ct.leg, c.knockout_two_legs FROM cup_ties ct JOIN competitions c ON c.id=ct.competition_id WHERE ct.match_id=?")
+            .bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?;
+        let knockout_decider = competition_type != "league" && tie_info.map(|(leg, two_legs)| two_legs == 0 || leg == 2).unwrap_or(true);
+        let snap = if knockout_decider && tie_info.map(|(_, two_legs)| two_legs != 0).unwrap_or(false) {
+            let aggregate_before: (i64, i64) = sqlx::query_as("SELECT COALESCE(m.home_score,0), COALESCE(m.away_score,0) FROM matches m JOIN cup_ties first_leg ON first_leg.match_id=m.id JOIN cup_ties current_leg ON current_leg.competition_id=first_leg.competition_id AND current_leg.season=first_leg.season AND current_leg.round=first_leg.round WHERE current_leg.match_id=? AND first_leg.leg=1")
+                .bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((0, 0));
+            crate::engine::simulate_clubs_with_aggregate(pool, hid, aid, aggregate_before).await?
+        } else {
+            crate::engine::simulate_clubs_with_knockout(pool, hid, aid, knockout_decider).await?
+        };
         let home_goals = snap.score[0] as i64;
         let away_goals = snap.score[1] as i64;
 
@@ -71,41 +82,40 @@ pub async fn advance_day(pool: &SqlitePool) -> Result<AdvanceResult, String> {
             }
         }
 
-        let is_cup: (String,) = sqlx::query_as("SELECT competition_type FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.map_err(|e| e.to_string())?;
-        if is_cup.0 == "league" {
+        let is_cup = competition_type;
+        if is_cup == "league" {
             update_standings(pool, comp_id, hid, aid, home_goals, away_goals).await?;
         }
         let group_ids: Vec<(i64,)> = sqlx::query_as("SELECT gm.group_id FROM group_members gm JOIN competition_groups cg ON cg.id=gm.group_id WHERE cg.competition_id=? AND cg.season=(SELECT season FROM game_state WHERE id=1) AND gm.club_id IN (?,?) GROUP BY gm.group_id HAVING COUNT(DISTINCT gm.club_id)=2").bind(comp_id).bind(hid).bind(aid).fetch_all(pool).await.unwrap_or_default();
         for (group_id,) in group_ids {
             update_group_members(pool, group_id, hid, aid, home_goals, away_goals).await?;
         }
-        if is_cup.0 != "league" {
+        if is_cup != "league" {
             let tie: Option<(i64, i64, i64, i64, i64, i64)> = sqlx::query_as("SELECT id, leg, home_club_id, away_club_id, COALESCE(aggregate_home_score,0), COALESCE(aggregate_away_score,0) FROM cup_ties WHERE match_id=?").bind(mid).fetch_optional(pool).await.map_err(|e| e.to_string())?;
             let is_two_leg = if let Some((_, _, _, _, _, _)) = tie { let (v,): (i64,) = sqlx::query_as("SELECT knockout_two_legs FROM competitions WHERE id=?").bind(comp_id).fetch_one(pool).await.unwrap_or((0,)); v != 0 } else { false };
             if is_two_leg {
                 let (tie_id, leg, first_home, first_away, prior_home, prior_away) = tie.unwrap();
+                let (prior_home, prior_away) = if leg == 2 {
+                    sqlx::query_as("SELECT COALESCE(m.home_score,0), COALESCE(m.away_score,0) FROM matches m JOIN cup_ties first_leg ON first_leg.match_id=m.id WHERE first_leg.competition_id=? AND first_leg.season=? AND first_leg.round=? AND first_leg.leg=1 AND ((first_leg.home_club_id=? AND first_leg.away_club_id=?) OR (first_leg.home_club_id=? AND first_leg.away_club_id=?)) LIMIT 1")
+                        .bind(comp_id).bind(sqlx::query_as::<_, (String,)>("SELECT season FROM matches WHERE id=?").bind(mid).fetch_one(pool).await.map_err(|e| e.to_string())?.0).bind(sqlx::query_as::<_, (i64,)>("SELECT round FROM matches WHERE id=?").bind(mid).fetch_one(pool).await.map_err(|e| e.to_string())?.0).bind(first_home).bind(first_away).bind(first_away).bind(first_home).fetch_optional(pool).await.map_err(|e| e.to_string())?.unwrap_or((prior_home, prior_away))
+                } else { (prior_home, prior_away) };
                 let (agg_home, agg_away) = if leg == 2 { (prior_home + away_goals, prior_away + home_goals) } else { (home_goals, away_goals) };
                 sqlx::query("UPDATE cup_ties SET aggregate_home_score=?, aggregate_away_score=? WHERE id=?").bind(agg_home).bind(agg_away).bind(tie_id).execute(pool).await.map_err(|e| e.to_string())?;
                 if leg == 2 {
-                    let winner = if agg_home > agg_away { first_home } else if agg_away > agg_home { first_away } else if rand::random::<bool>() { first_home } else { first_away };
+                    let winner = if agg_home > agg_away { first_home } else if agg_away > agg_home { first_away } else if snap.penalty_score[0] > snap.penalty_score[1] { first_home } else { first_away };
                     sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE id=?").bind(winner).bind(tie_id).execute(pool).await.map_err(|e| e.to_string())?;
                     sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE competition_id=? AND season=(SELECT season FROM matches WHERE id=?) AND round=(SELECT round FROM matches WHERE id=?) AND leg=1 AND ((home_club_id=? AND away_club_id=?) OR (home_club_id=? AND away_club_id=?))").bind(winner).bind(comp_id).bind(mid).bind(mid).bind(first_home).bind(first_away).bind(first_away).bind(first_home).execute(pool).await.map_err(|e| e.to_string())?;
                 }
             } else {
             let winner = if home_goals > away_goals { hid } else if away_goals > home_goals { aid } else {
                 // Desempate reglamentario: prórroga y, si persiste el empate, penaltis.
-                let extra_home = rand::random::<bool>();
-                let extra_away = rand::random::<bool>();
-                if extra_home != extra_away { if extra_home { hid } else { aid } }
-                else if rand::random::<bool>() { hid } else { aid }
+                if snap.penalty_score[0] > snap.penalty_score[1] { hid } else { aid }
             };
             if home_goals == away_goals {
-                let extra_home = rand::random::<bool>();
-                let extra_away = rand::random::<bool>();
-                let (pen_home, pen_away) = if extra_home != extra_away { (extra_home as i64, extra_away as i64) } else { (rand::random::<u8>() as i64 % 5, rand::random::<u8>() as i64 % 5) };
-                let resolved_winner = if pen_home > pen_away { hid } else if pen_away > pen_home { aid } else if rand::random::<bool>() { hid } else { aid };
-                sqlx::query("UPDATE cup_ties SET winner_club_id=?, went_to_extra_time=1, went_to_penalties=?, penalty_home_score=?, penalty_away_score=? WHERE match_id=?")
-                    .bind(resolved_winner).bind((pen_home == pen_away) as i64).bind(pen_home).bind(pen_away).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
+                let resolved_winner = if snap.penalty_score[0] > snap.penalty_score[1] { hid } else { aid };
+                sqlx::query("UPDATE cup_ties SET winner_club_id=?, went_to_extra_time=?, went_to_penalties=?, penalty_home_score=?, penalty_away_score=? WHERE match_id=?")
+                    .bind(resolved_winner).bind(snap.went_to_extra_time as i64).bind(snap.went_to_penalties as i64)
+                    .bind(snap.penalty_score[0] as i64).bind(snap.penalty_score[1] as i64).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
             } else {
                 sqlx::query("UPDATE cup_ties SET winner_club_id=? WHERE match_id=?").bind(winner).bind(mid).execute(pool).await.map_err(|e| e.to_string())?;
             }
