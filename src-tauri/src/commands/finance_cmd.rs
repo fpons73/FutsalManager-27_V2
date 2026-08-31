@@ -122,6 +122,13 @@ mod tests {
 }
 
 #[tauri::command]
+pub async fn upgrade_facility(state: State<'_, AppState>, facility: String) -> Result<String, String> {
+    let pool = active_pool(&state)?;
+    let club = user_club(&pool).await?;
+    crate::finance::upgrade_facility(&pool, club, &facility).await
+}
+
+#[tauri::command]
 pub async fn get_injuries(state: State<'_, AppState>) -> Result<Vec<(i64, String, String, String, String)>, String> {
     let pool = active_pool(&state)?;
     let uc = user_club(&pool).await?;
