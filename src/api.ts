@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type ClubRow = { id: number; name: string; short_name: string; nation: string; reputation: number; primary_color: string; division: string; tier: number | null };
+export type ClubRow = { id: number; name: string; short_name: string; nation: string; reputation: number; primary_color: string; division: string; tier: number | null; tactical_style?: string; tactical_formation?: string; tactical_tempo?: number; tactical_pressing?: number; tactical_defensive_line?: number; tactical_width?: number };
 export type CompRow = { id: number; name: string; nation: string; kind: string; competition_type?: string; knockout_rounds?: number; champion_id?: number | null; champion_name?: string | null; group_count?: number; teams_per_group?: number; group_qualifiers?: number; knockout_two_legs?: number };
 export type NewGameResult = { game_date: string; season: string; clubs: ClubRow[]; competitions: CompRow[] };
 export type GameStateRow = { game_date: string; season: string; user_club_id: number | null; user_club_name: string | null };
@@ -80,6 +80,7 @@ export const api = {
   getMarket: () => invoke<MarketPlayer[]>("get_market"),
   getOffers: () => invoke<OfferRow[]>("get_offers"),
   getContracts: (clubId:number) => invoke<ContractRow[]>("get_contracts", { clubId }),
+  editorUpdateTacticalProfile: (p:{clubId:number;style:string;formation:string;tempo:number;pressing:number;defensiveLine:number;width:number}) => invoke<void>("editor_update_tactical_profile", { clubId:p.clubId, style:p.style, formation:p.formation, tempo:p.tempo, pressing:p.pressing, defensiveLine:p.defensiveLine, width:p.width }),
   editorListStadiums: () => invoke<StadiumRow[]>("editor_list_stadiums"),
   editorCreateStadium: (p:{name:string;cityId:number|null;capacity:number;pitchType:string}) => invoke<number>("editor_create_stadium", { name:p.name, cityId:p.cityId, capacity:p.capacity, pitchType:p.pitchType }),
   editorUpdateStadium: (p:{id:number;name:string;cityId:number|null;capacity:number;pitchType:string}) => invoke<void>("editor_update_stadium", { id:p.id, name:p.name, cityId:p.cityId, capacity:p.capacity, pitchType:p.pitchType }),

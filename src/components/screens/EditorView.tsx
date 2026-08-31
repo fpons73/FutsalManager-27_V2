@@ -31,6 +31,7 @@ export default function EditorView() {
   const [editingPlayer, setEditingPlayer] = useState<any | null>(null);
   const [editingStaff, setEditingStaff] = useState<any | null>(null);
   const [editingNation, setEditingNation] = useState<any | null>(null);
+  const [tacticalClub, setTacticalClub] = useState<any | null>(null);
 
   const [confeds, setConfeds] = useState<any[]>([]);
   const [nations, setNations] = useState<any[]>([]);
@@ -87,6 +88,7 @@ export default function EditorView() {
     }catch(e){ setMsg(String(e)); }
   };
   const delClub = async (id:number) => { if(!confirm("¿Borrar club?")) return; try{ await invoke("editor_delete_club",{id}); load("clubs"); }catch(e){ setMsg(String(e)); } };
+  const saveTacticalClub = async () => { if(!tacticalClub)return; try { await invoke("editor_update_tactical_profile", { clubId:tacticalClub.id, style:tacticalClub.tactical_style, formation:tacticalClub.tactical_formation, tempo:Number(tacticalClub.tactical_tempo), pressing:Number(tacticalClub.tactical_pressing), defensiveLine:Number(tacticalClub.tactical_defensive_line), width:Number(tacticalClub.tactical_width) }); setMsg("Perfil táctico actualizado"); setTacticalClub(null); load("clubs"); } catch(e) { setMsg(String(e)); } };
 
   // ---- Players ----
   const savePlayer = async () => {
@@ -164,6 +166,7 @@ export default function EditorView() {
           {tab==="clubs" && (
             <div className="space-y-4">
               {editingClub && <ClubEditor club={editingClub} nations={nations} onClose={()=>{ setEditingClub(null); setNewClub(emptyClub); load("clubs"); }} />}
+              {tacticalClub && <Panel className="border-fm-accent/50 p-4"><div className="mb-3 flex items-center justify-between"><div><div className="text-xs font-bold uppercase tracking-widest text-fm-accent">Identidad de juego</div><h3 className="font-bold">{tacticalClub.name}</h3></div><button onClick={()=>setTacticalClub(null)} className="text-fm-dim">Cerrar</button></div><div className="grid gap-2 sm:grid-cols-3"><select value={tacticalClub.tactical_style} onChange={e=>setTacticalClub({...tacticalClub,tactical_style:e.target.value})} className="rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm"><option value="balanced">Equilibrado</option><option value="counter">Contrataque</option><option value="possession">Posesión</option><option value="high_press">Presión alta</option><option value="low_block">Bloque bajo</option></select><select value={tacticalClub.tactical_formation} onChange={e=>setTacticalClub({...tacticalClub,tactical_formation:e.target.value})} className="rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm"><option>3-1</option><option>4-0</option><option>2-2</option><option>5-0</option></select>{([['tactical_tempo','Ritmo'],['tactical_pressing','Presión'],['tactical_defensive_line','Bloque'],['tactical_width','Amplitud']] as const).map(([key,label])=><label key={key} className="text-xs text-fm-dim">{label}<input type="number" min="0" max="100" value={tacticalClub[key]} onChange={e=>setTacticalClub({...tacticalClub,[key]:e.target.value})} className="mt-1 w-full rounded border border-fm-border bg-fm-bg px-2 py-1.5 text-sm text-white" /></label>)}<button onClick={saveTacticalClub} className="rounded bg-fm-accent px-3 py-1.5 text-sm font-bold text-black">Guardar perfil</button></div></Panel>}
               <div className="rounded-xl border border-fm-border bg-fm-panel p-3">
                 <div className="mb-2 text-xs font-bold uppercase tracking-widest text-fm-dim">{inEdit(newClub) ? "Datos del club · ID " + newClub.id : "Nuevo club"}</div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -186,7 +189,7 @@ export default function EditorView() {
                     <tbody>{filtered.map((c:any)=><tr key={c.id} className="border-t border-fm-border hover:bg-fm-panel2">
                       <td className="px-2 py-1.5"><span className="inline-flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded bg-fm-bg text-xs font-bold text-white" style={{background:c.primary_color}}>{c.short_name}</span><span className="font-semibold">{c.name}</span></span></td>
                       <td className="px-2 py-1.5 text-xs">{c.nation}</td><td className="px-2 py-1.5 text-xs">{c.stadium}</td><td className="px-2 py-1.5 text-center font-mono">{c.reputation}</td><td className="px-2 py-1.5 text-center font-mono">{c.squad_count}</td>
-                      <td className="px-2 py-1.5 text-right space-x-1"><button onClick={()=>{ setNewClub({ id: c.id, name: c.name, short: c.short_name, nation: c.nation_id, city: c.city ?? "", stadium: c.stadium ?? "", cap: c.capacity ?? 2000, rep: c.reputation, c1: c.primary_color ?? "#0f4c3a", c2: c.secondary_color ?? "#ffffff" }); setEditingClub(c); }} className="rounded bg-sky-600 px-2 py-0.5 text-xs text-white">Editar</button><button onClick={()=>delClub(c.id)} className="rounded bg-red-600 px-2 py-0.5 text-xs text-white">Borrar</button></td>
+                      <td className="px-2 py-1.5 text-right space-x-1"><button onClick={()=>setTacticalClub({ ...c, tactical_style:c.tactical_style||"balanced", tactical_formation:c.tactical_formation||"3-1", tactical_tempo:c.tactical_tempo??50, tactical_pressing:c.tactical_pressing??50, tactical_defensive_line:c.tactical_defensive_line??50, tactical_width:c.tactical_width??50 })} className="rounded bg-violet-600 px-2 py-0.5 text-xs text-white">Táctica</button><button onClick={()=>{ setNewClub({ id: c.id, name: c.name, short: c.short_name, nation: c.nation_id, city: c.city ?? "", stadium: c.stadium ?? "", cap: c.capacity ?? 2000, rep: c.reputation, c1: c.primary_color ?? "#0f4c3a", c2: c.secondary_color ?? "#ffffff" }); setEditingClub(c); }} className="rounded bg-sky-600 px-2 py-0.5 text-xs text-white">Editar</button><button onClick={()=>delClub(c.id)} className="rounded bg-red-600 px-2 py-0.5 text-xs text-white">Borrar</button></td>
                     </tr>)}</tbody>
                   </table>
                 </div>

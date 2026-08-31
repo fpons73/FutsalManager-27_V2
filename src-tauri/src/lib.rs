@@ -130,6 +130,7 @@ pub fn run() {
       commands::editor_cmd::editor_create_club,
       commands::editor_cmd::editor_delete_club,
       commands::editor_cmd::editor_update_club,
+      commands::editor_cmd::editor_update_tactical_profile,
       commands::editor_cmd::editor_create_player,
       commands::editor_cmd::editor_delete_player,
       commands::editor_cmd::editor_update_player,

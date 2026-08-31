@@ -6,7 +6,7 @@ pub struct NationRow { pub id: i64, pub name: String, pub confederation: String,
 #[derive(Serialize, Deserialize)]
 pub struct ConfederationRow { pub id: i64, pub name: String, pub short_name: String, pub reputation: i64, pub crest_path: Option<String> }
 #[derive(Serialize, Deserialize)]
-pub struct ClubRow { pub id: i64, pub name: String, pub short_name: String, pub nation: String, pub nation_id: i64, pub city: String, pub city_id: Option<i64>, pub stadium: String, pub capacity: i64, pub reputation: i64, pub primary_color: String, pub secondary_color: String, pub crest_path: Option<String>, pub coach_id: Option<i64>, pub coach_name: Option<String>, pub staff_count: i64, pub squad_count: i64 }
+pub struct ClubRow { pub id: i64, pub name: String, pub short_name: String, pub nation: String, pub nation_id: i64, pub city: String, pub city_id: Option<i64>, pub stadium: String, pub capacity: i64, pub reputation: i64, pub primary_color: String, pub secondary_color: String, pub crest_path: Option<String>, pub coach_id: Option<i64>, pub coach_name: Option<String>, pub staff_count: i64, pub squad_count: i64, pub tactical_style: String, pub tactical_formation: String, pub tactical_tempo: i64, pub tactical_pressing: i64, pub tactical_defensive_line: i64, pub tactical_width: i64 }
 #[derive(Serialize, Deserialize)]
 pub struct PlayerRow { pub id: i64, pub first_name: String, pub last_name: String, pub common_name: String, pub nation: String, pub nation_id: i64, pub second_nation_id: Option<i64>, pub club: String, pub club_id: Option<i64>, pub position: String, pub secondary_position: Option<String>, pub ca: i64, pub pa: i64, pub age: i64, pub foot: String, pub photo_path: Option<String>, pub flag_path: Option<String>, pub second_flag_path: Option<String> }
 #[derive(Serialize, Deserialize, Clone)]
@@ -62,14 +62,16 @@ pub async fn list_clubs(pool: &SqlitePool) -> Result<Vec<ClubRow>, String> {
         reputation: i64, primary_color: String, secondary_color: String,
         crest_path: Option<String>, coach_id: Option<i64>, coach_name: Option<String>,
         staff_count: i64, squad_count: i64,
+        tactical_style: String, tactical_formation: String, tactical_tempo: i64, tactical_pressing: i64, tactical_defensive_line: i64, tactical_width: i64,
     }
     let rows = sqlx::query_as::<_, Cr>(
         "SELECT c.id, c.name, c.short_name, n.name AS nation, c.nation_id, ci.name AS city, c.city_id, s.name AS stadium, s.capacity, c.reputation, c.primary_color, c.secondary_color, c.crest_path, c.coach_id, coach.common_name AS coach_name,
                 (SELECT COUNT(*) FROM staff st WHERE st.club_id=c.id) AS staff_count,
+                COALESCE(t.playing_style,'balanced'), COALESCE(t.formation,'3-1'), COALESCE(t.tempo,50), COALESCE(t.pressing,50), COALESCE(t.defensive_line,50), COALESCE(t.width,50),
                 (SELECT COUNT(*) FROM contracts ct WHERE ct.club_id=c.id AND ct.is_active=1) AS squad_count
-         FROM clubs c JOIN nations n ON n.id=c.nation_id LEFT JOIN cities ci ON ci.id=c.city_id LEFT JOIN stadiums s ON s.id=c.stadium_id LEFT JOIN staff coach ON coach.id=c.coach_id ORDER BY c.reputation DESC, c.name"
+         FROM clubs c JOIN nations n ON n.id=c.nation_id LEFT JOIN cities ci ON ci.id=c.city_id LEFT JOIN stadiums s ON s.id=c.stadium_id LEFT JOIN staff coach ON coach.id=c.coach_id LEFT JOIN tactics t ON t.club_id=c.id ORDER BY c.reputation DESC, c.name"
     ).fetch_all(pool).await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| ClubRow { id: r.id, name: r.name, short_name: r.short_name, nation: r.nation, nation_id: r.nation_id, city: r.city.unwrap_or_default(), city_id: r.city_id, stadium: r.stadium.unwrap_or_default(), capacity: r.capacity.unwrap_or(2000), reputation: r.reputation, primary_color: r.primary_color, secondary_color: r.secondary_color, crest_path: r.crest_path, coach_id: r.coach_id, coach_name: r.coach_name, staff_count: r.staff_count, squad_count: r.squad_count }).collect())
+    Ok(rows.into_iter().map(|r| ClubRow { id: r.id, name: r.name, short_name: r.short_name, nation: r.nation, nation_id: r.nation_id, city: r.city.unwrap_or_default(), city_id: r.city_id, stadium: r.stadium.unwrap_or_default(), capacity: r.capacity.unwrap_or(2000), reputation: r.reputation, primary_color: r.primary_color, secondary_color: r.secondary_color, crest_path: r.crest_path, coach_id: r.coach_id, coach_name: r.coach_name, staff_count: r.staff_count, squad_count: r.squad_count, tactical_style: r.tactical_style, tactical_formation: r.tactical_formation, tactical_tempo: r.tactical_tempo, tactical_pressing: r.tactical_pressing, tactical_defensive_line: r.tactical_defensive_line, tactical_width: r.tactical_width }).collect())
 }
 pub async fn list_players(pool: &SqlitePool, limit: i64) -> Result<Vec<PlayerRow>, String> {
     let lim = limit.clamp(20, 2000);
@@ -87,6 +89,12 @@ pub async fn list_players_by_club(pool: &SqlitePool, club_id: i64) -> Result<Vec
     Ok(rows.into_iter().map(|(id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club, club_id, position, secondary_position, ca, pa, foot, photo_path, flag_path)| {
         PlayerRow { id, first_name, last_name, common_name, nation, nation_id, second_nation_id, club: club.unwrap_or_default(), club_id, position: position.unwrap_or_else(|| "UNI".into()), secondary_position, ca, pa, age: 0, foot, photo_path, flag_path, second_flag_path: None }
     }).collect())
+}
+pub async fn update_tactical_profile(pool: &SqlitePool, club_id: i64, style: String, formation: String, tempo: i64, pressing: i64, defensive_line: i64, width: i64) -> Result<(), String> {
+    if !["balanced","counter","possession","high_press","low_block"].contains(&style.as_str()) || !["3-1","4-0","2-2","5-0"].contains(&formation.as_str()) || [tempo, pressing, defensive_line, width].iter().any(|v| !(0..=100).contains(v)) { return Err("Perfil táctico no válido".into()); }
+    sqlx::query("INSERT INTO tactics(club_id,formation,tempo,pressing,defensive_line,width,playing_style,powerplay_enabled) VALUES(?,?,?,?,?,?,?,1) ON CONFLICT(club_id) DO UPDATE SET formation=excluded.formation,tempo=excluded.tempo,pressing=excluded.pressing,defensive_line=excluded.defensive_line,width=excluded.width,playing_style=excluded.playing_style")
+        .bind(club_id).bind(formation).bind(tempo).bind(pressing).bind(defensive_line).bind(width).bind(style).execute(pool).await.map_err(|e| e.to_string())?;
+    Ok(())
 }
 pub async fn assign_player(pool: &SqlitePool, player_id: i64, club_id: i64) -> Result<(), String> {
     let has: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM contracts WHERE player_id=? AND is_active=1").bind(player_id).fetch_one(pool).await.map_err(|e| e.to_string())?;

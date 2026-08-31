@@ -122,6 +122,8 @@ pub async fn editor_delete_club(state: State<'_, AppState>, id: i64) -> Result<(
     crate::editor::delete_club(&pool, id).await
 }
 #[tauri::command]
+pub async fn editor_update_tactical_profile(state: State<'_, AppState>, club_id:i64, style:String, formation:String, tempo:i64, pressing:i64, defensive_line:i64, width:i64) -> Result<(),String> { let pool=state.pool.lock().map_err(|e|e.to_string())?.clone().ok_or("No hay partida")?; crate::editor::update_tactical_profile(&pool,club_id,style,formation,tempo,pressing,defensive_line,width).await }
+#[tauri::command]
 pub async fn editor_update_club(state: State<'_, AppState>, id: i64, name: String, short_name: String, nation_id: i64, city: String, stadium: String, capacity: i64, reputation: i64, c1: String, c2: String) -> Result<(), String> {
     let pool = state.pool.lock().map_err(|e| e.to_string())?.clone().ok_or("No hay partida")?;
     crate::editor::update_club(&pool, id, name, short_name, nation_id, city, stadium, capacity, reputation, c1, c2).await

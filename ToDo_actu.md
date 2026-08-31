@@ -225,6 +225,7 @@
 - [x] Atributos del staff aplicados al rendimiento de sistemas deportivos.
 - [x] IA táctica reactiva: cambios de plan por marcador, tiempo, faltas y fatiga en equipos controlados por la máquina.
 - [x] Estilos tácticos persistentes por club (contragolpe, posesión, presión alta y bloque bajo) aplicados al motor.
+- [x] Editor visual para configurar estilo, formación, ritmo, presión, bloque y amplitud de cada club.
 
 ## Hito L — Contratos avanzados
 
