@@ -265,6 +265,10 @@ pub async fn start_live_match(state: State<'_, AppState>, match_id: i64) -> Resu
     let mut r2: Vec<(u32, u8, Role, PlayerAttrs)> = Vec::new();
     for r in &rows_away { let role = role_for_index(r2.len()); r2.push((r.0 as u32, (r2.len() + 1) as u8, role, attrs_from(r))); }
     let mut eng = MatchEngine::new([(0, hn, hc), (1, an, ac)], [r1, r2]);
+    if let Some((formation, tempo, pressing, defensive_line, width, style)) = sqlx::query_as::<_, (String, i64, i64, i64, i64, String)>("SELECT formation,tempo,pressing,defensive_line,width,COALESCE(playing_style,'balanced') FROM tactics WHERE club_id=?").bind(away).fetch_optional(&pool).await.map_err(|e| e.to_string())? {
+        let base = EngineTactics { formation: formation_code(&formation), tempo: tempo as f32, pressing: pressing as f32, defensive_line: defensive_line as f32, width: width as f32 };
+        eng.set_tactics(1, crate::engine::tactics_for_style(base, &style));
+    }
     eng.start();
     let snap = eng.snapshot();
     {
